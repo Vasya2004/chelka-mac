@@ -190,7 +190,10 @@ class BoringViewModel: NSObject, ObservableObject {
     }
 
     func open() {
-        self.notchSize = openNotchSize
+        // Полоса с лимитами ИИ делает открытую «чёлку» чуть выше
+        self.notchSize = CGSize(
+            width: openNotchSize.width,
+            height: openNotchSize.height + (Defaults[.showAIUsage] ? usageStripHeight : 0))
         self.notchState = .open
         
         // Force music information update when notch is opened

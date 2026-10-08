@@ -440,6 +440,18 @@ struct NotchHomeView: View {
     }
 
     private var mainContent: some View {
+        VStack(spacing: 6) {
+            playerAndCalendar
+            if Defaults[.showAIUsage] {
+                UsageStripView()
+                    .frame(height: usageStripHeight - 6)
+            }
+        }
+        .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .top)), removal: .opacity))
+        .blur(radius: vm.notchState == .closed ? 30 : 0)
+    }
+
+    private var playerAndCalendar: some View {
         HStack(alignment: .top, spacing: (shouldShowCamera && Defaults[.showCalendar]) ? 10 : 15) {
             MusicPlayerView(albumArtNamespace: albumArtNamespace)
 
@@ -461,8 +473,6 @@ struct NotchHomeView: View {
                     .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.76, blendDuration: 0), value: shouldShowCamera)
             }
         }
-        .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .top)), removal: .opacity))
-        .blur(radius: vm.notchState == .closed ? 30 : 0)
     }
 }
 

@@ -618,7 +618,7 @@ struct Media: View {
             } header: {
                 Text("Media Source")
             } footer: {
-                if MusicManager.shared.isNowPlayingDeprecated {
+                if mediaController == .youtubeMusic {
                     HStack {
                         Text("YouTube Music requires this third-party app to be installed: ")
                             .foregroundStyle(.secondary)
@@ -699,11 +699,8 @@ struct Media: View {
 
     // Only show controller options that are available on this macOS version
     private var availableMediaControllers: [MediaControllerType] {
-        if MusicManager.shared.isNowPlayingDeprecated {
-            return MediaControllerType.allCases.filter { $0 != .nowPlaying }
-        } else {
-            return MediaControllerType.allCases
-        }
+        // «Now Playing» показываем всегда: он нужен для роликов в браузере (YouTube) и любых других плееров
+        return MediaControllerType.allCases
     }
 }
 
@@ -870,7 +867,7 @@ struct About: View {
                 HStack(spacing: 30) {
                     Spacer(minLength: 0)
                     Button {
-                        if let url = URL(string: "https://github.com/TheBoredTeam/boring.notch") {
+                        if let url = URL(string: "https://github.com/Vasya2004/chelka-mac") {
                             NSWorkspace.shared.open(url)
                         }
                     } label: {
@@ -1414,6 +1411,7 @@ struct Advanced: View {
     @Default(.customAccentColorData) var customAccentColorData
     @Default(.extendHoverArea) var extendHoverArea
     @Default(.showOnLockScreen) var showOnLockScreen
+    @Default(.showAgentActivity) var showAgentActivity
     @Default(.hideFromScreenRecording) var hideFromScreenRecording
     
     @State private var customAccentColor: Color = .accentColor
@@ -1627,6 +1625,44 @@ struct Advanced: View {
                 }
             } header: {
                 Text("Window Behavior")
+            }
+
+            Section {
+                Defaults.Toggle(key: .showUnlockAnimation) {
+                    Text("Show lock and unlock animation")
+                }
+                Defaults.Toggle(key: .playLockSound) {
+                    Text("Play lock and unlock sound")
+                }
+            } header: {
+                Text("Lock Screen")
+            }
+
+            Section {
+                Defaults.Toggle(key: .showAgentActivity) {
+                    Text("Show AI agent activity")
+                }
+                Defaults.Toggle(key: .agentCompletionExpand) {
+                    Text("Expand notch when an agent finishes")
+                }
+                .disabled(!showAgentActivity)
+                Defaults.Toggle(key: .showAIUsage) {
+                    Text("Show AI usage limits on the home screen")
+                }
+                Defaults.Toggle(key: .agentCompletionSound) {
+                    Text("Play sound when an agent finishes")
+                }
+                .disabled(!showAgentActivity)
+                Defaults.Toggle(key: .agentPermissionPrompts) {
+                    Text("Approve agent permissions in the notch")
+                }
+                .disabled(!showAgentActivity)
+            } header: {
+                Text("AI Agents")
+            } footer: {
+                Text("Agents (Claude Code, Codex, Cursor, Kimi) report their status through hooks. The sound can also be toggled with the speaker button on the Agents tab.")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
             }
         }
         .accentColor(.effectiveAccent)

@@ -10,6 +10,11 @@ import Combine
 import Defaults
 import SwiftUI
 
+enum LockAnimationKind {
+    case locking
+    case unlocking
+}
+
 enum SneakContentType {
     case brightness
     case volume
@@ -52,6 +57,10 @@ class BoringViewCoordinator: ObservableObject {
 
     @Published var currentView: NotchViews = .home
     @Published var helloAnimationRunning: Bool = false
+    /// Идёт ли анимация разблокировки Mac в закрытой «чёлке»
+    @Published var lockAnimationRunning: Bool = false
+    @Published var lockAnimationKind: LockAnimationKind = .unlocking
+    private var lockAnimationTask: Task<Void, Never>?
     private var sneakPeekDispatch: DispatchWorkItem?
     private var expandingViewDispatch: DispatchWorkItem?
     private var hudEnableTask: Task<Void, Never>?
@@ -175,6 +184,23 @@ class BoringViewCoordinator: ObservableObject {
         }
     }
     
+    /// Запускает анимацию замка в «чёлке».
+    /// При блокировке замок закрывается и остаётся на экране, пока Mac заблокирован.
+    /// При разблокировке открывается и через пару секунд скрывается.
+    func playLockAnimation(_ kind: LockAnimationKind) {
+        guard Defaults[.showUnlockAnimation] else { return }
+        lockAnimationTask?.cancel()
+        lockAnimationKind = kind
+        if Defaults[.playLockSound] { LockSoundPlayer.shared.play(kind) }
+        withAnimation(.smooth(duration: 0.25)) { lockAnimationRunning = true }
+        guard kind == .unlocking else { return }
+        lockAnimationTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(1500))
+            guard !Task.isCancelled, let self else { return }
+            withAnimation(.smooth(duration: 0.3)) { self.lockAnimationRunning = false }
+        }
+    }
+
     @objc func sneakPeekEvent(_ notification: Notification) {
         let decoder = JSONDecoder()
         if let decodedData = try? decoder.decode(
@@ -217,7 +243,8 @@ class BoringViewCoordinator: ObservableObject {
             }
         }
         Task { @MainActor in
-            withAnimation(.smooth) {
+            // Упругое появление и плавное исчезновение плашки
+            withAnimation(status ? .spring(response: 0.42, dampingFraction: 0.7) : .smooth(duration: 0.3)) {
                 self.sneakPeek.show = status
                 self.sneakPeek.type = type
                 self.sneakPeek.value = value

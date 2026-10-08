@@ -24,6 +24,12 @@
 	<array>
 		<string>com.spotify.client</string>
 		<string>com.apple.Music</string>
+		<string>com.apple.Terminal</string>
+		<string>com.googlecode.iterm2</string>
+	</array>
+	<key>com.apple.security.temporary-exception.files.home-relative-path.read-only</key>
+	<array>
+		<string>/.codex/sessions/</string>
 	</array>
 	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
 	<array>

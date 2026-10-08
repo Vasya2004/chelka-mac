@@ -92,6 +92,13 @@ extension Defaults.Keys {
     static let notchHeight = Key<CGFloat>("notchHeight", default: 32)
     //static let openLastTabByDefault = Key<Bool>("openLastTabByDefault", default: false)
     static let showOnLockScreen = Key<Bool>("showOnLockScreen", default: false)
+    static let showUnlockAnimation = Key<Bool>("showUnlockAnimation", default: true)
+    static let showAgentActivity = Key<Bool>("showAgentActivity", default: true)
+    static let agentPermissionPrompts = Key<Bool>("agentPermissionPrompts", default: true)
+    static let agentCompletionSound = Key<Bool>("agentCompletionSound", default: true)
+    static let agentCompletionExpand = Key<Bool>("agentCompletionExpand", default: true)
+    static let showAIUsage = Key<Bool>("showAIUsage", default: true)
+    static let playLockSound = Key<Bool>("playLockSound", default: true)
     static let hideFromScreenRecording = Key<Bool>("hideFromScreenRecording", default: false)
     
     // MARK: Appearance
@@ -152,7 +159,7 @@ extension Defaults.Keys {
     
     // MARK: HUD
     static let hudReplacement = Key<Bool>("hudReplacement", default: false)
-    static let inlineHUD = Key<Bool>("inlineHUD", default: false)
+    static let inlineHUD = Key<Bool>("inlineHUD", default: true)
     static let enableGradient = Key<Bool>("enableGradient", default: false)
     static let systemEventIndicatorShadow = Key<Bool>("systemEventIndicatorShadow", default: false)
     static let systemEventIndicatorUseAccent = Key<Bool>("systemEventIndicatorUseAccent", default: false)

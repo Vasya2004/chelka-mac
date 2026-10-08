@@ -22,14 +22,14 @@ struct DynamicNotchApp: App {
 
     init() {
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+            startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
 
         // Initialize the settings window controller with the updater controller
         SettingsWindowController.shared.setUpdaterController(updaterController)
     }
 
     var body: some Scene {
-        MenuBarExtra("boring.notch", systemImage: "sparkle", isInserted: $showMenuBarIcon) {
+        MenuBarExtra("Chelka", systemImage: "sparkle", isInserted: $showMenuBarIcon) {
             Button("Settings") {
                 DispatchQueue.main.async {
                     SettingsWindowController.shared.showWindow()
@@ -38,7 +38,7 @@ struct DynamicNotchApp: App {
             .keyboardShortcut(KeyEquivalent(","), modifiers: .command)
             CheckForUpdatesView(updater: updaterController.updater)
             Divider()
-            Button("Restart Boring Notch") {
+            Button("Restart Chelka") {
                 ApplicationRelauncher.restart()
             }
             Button("Quit", role: .destructive) {
@@ -91,23 +91,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     func onScreenLocked(_ notification: Notification) {
         isScreenLocked = true
-        if !Defaults[.showOnLockScreen] {
-            cleanupWindows()
-        } else {
+        if Defaults[.showOnLockScreen] {
+            coordinator.playLockAnimation(.locking)
             enableSkyLightOnAllWindows()
+        } else if Defaults[.showUnlockAnimation] {
+            // Окна не удаляем: замок остаётся поверх экрана блокировки до разблокировки,
+            // а при разблокировке окна уже готовы, и анимация стартует без задержки
+            coordinator.playLockAnimation(.locking)
+            enableSkyLightOnAllWindows()
+        } else {
+            cleanupWindows()
         }
     }
 
     @MainActor
     func onScreenUnlocked(_ notification: Notification) {
         isScreenLocked = false
+        coordinator.playLockAnimation(.unlocking)
         if !Defaults[.showOnLockScreen] {
             adjustWindowPosition(changeAlpha: true)
-        } else {
-            disableSkyLightOnAllWindows()
         }
+        disableSkyLightOnAllWindows()
     }
-    
+
     @MainActor
     private func enableSkyLightOnAllWindows() {
         if Defaults[.showOnAllDisplays] {
@@ -280,6 +286,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        LockSoundPlayer.shared.prewarm()
+        AgentActivityManager.shared.start()
+        UsageManager.shared.start()
+        CodexActivityWatcher.shared.start()
 
         NotificationCenter.default.addObserver(
             self,
@@ -427,12 +437,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.showOnboardingWindow()
             }
             playWelcomeSound()
-        } else if MusicManager.shared.isNowPlayingDeprecated
-            && Defaults[.mediaController] == .nowPlaying
-        {
-            DispatchQueue.main.async {
-                self.showOnboardingWindow(step: .musicPermission)
-            }
         }
 
         previousScreens = NSScreen.screens

@@ -29,8 +29,8 @@ struct CheckForUpdatesView: View {
     }
     
     var body: some View {
-        Button("Check for Updates…", action: updater.checkForUpdates)
-            .disabled(!checkForUpdatesViewModel.canCheckForUpdates)
+        // Автообновление отключено: Chelka не публикует ленту обновлений (appcast), а оригинальная лента Boring Notch ей не подходит
+        EmptyView()
     }
 }
 
@@ -47,21 +47,7 @@ struct UpdaterSettingsView: View {
     }
     
     var body: some View {
-        Section {
-            Toggle("Automatically check for updates", isOn: $automaticallyChecksForUpdates)
-                .onChange(of: automaticallyChecksForUpdates) { _, newValue in
-                    updater.automaticallyChecksForUpdates = newValue
-                }
-            
-            Toggle("Automatically download updates", isOn: $automaticallyDownloadsUpdates)
-                .disabled(!automaticallyChecksForUpdates)
-                .onChange(of: automaticallyDownloadsUpdates) { _, newValue in
-                    updater.automaticallyDownloadsUpdates = newValue
-                }
-        } header: {
-            HStack {
-                Text("Software updates")
-            }
-        }
+        // Автообновление отключено (см. CheckForUpdatesView), поэтому настроек обновления нет
+        EmptyView()
     }
 }

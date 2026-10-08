@@ -20,6 +20,7 @@ struct ContentView: View {
 
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @ObservedObject var musicManager = MusicManager.shared
+    @ObservedObject var agentManager = AgentActivityManager.shared
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var brightnessManager = BrightnessManager.shared
     @ObservedObject var volumeManager = VolumeManager.shared
@@ -58,13 +59,60 @@ struct ContentView: View {
         )
     }
 
+    /// Показывать ли индикатор ИИ-агента в закрытой «чёлке»
+    private var agentActivityVisible: Bool {
+        Defaults[.showAgentActivity] && agentManager.primary != nil
+            && vm.notchState == .closed && !vm.hideOnClosed
+            && !coordinator.helloAnimationRunning && !coordinator.lockAnimationRunning
+    }
+
+    /// Системное уведомление (батарея, громкость, яркость, микрофон), которое ненадолго занимает «чёлку»
+    private var systemOverlayShown: Bool {
+        (coordinator.expandingView.show && coordinator.expandingView.type == .battery
+            && Defaults[.showPowerStatusNotifications])
+            || (coordinator.sneakPeek.show && coordinator.sneakPeek.type != .music
+                && coordinator.sneakPeek.type != .battery)
+    }
+
+    /// Есть ли запрос разрешения от агента, ожидающий ответа в закрытой «чёлке»
+    private var agentPermissionVisible: Bool {
+        agentActivityVisible && agentManager.currentPermission != nil
+    }
+
+    /// Есть ли «развёрнутое» уведомление агента (завершение, ошибка, ожидание)
+    private var agentBannerVisible: Bool {
+        Defaults[.agentCompletionExpand] && agentActivityVisible && agentManager.banner != nil
+            && !systemOverlayShown && !coordinator.sneakPeek.show
+    }
+
+    /// «Чёлка» развёрнута блоком под строкой (запрос разрешения или уведомление)
+    private var agentExpanded: Bool { agentPermissionVisible || agentBannerVisible }
+
+    /// Играет ли музыка так, что её индикатор показывается в закрытой «чёлке»
+    private var musicLiveActivityShown: Bool {
+        (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled
+    }
+
+    /// Ширина боковой части строки: при совмещении с музыкой она чуть шире
+    private var agentSideWidth: CGFloat { musicLiveActivityShown ? 40 : AgentActivityView.sideWidth }
+
+    private var agentRowWidth: CGFloat {
+        let base = vm.closedNotchSize.width + 2 * agentSideWidth
+        if agentPermissionVisible { return max(base, AgentPermissionView.width) }
+        return agentBannerVisible ? max(base, AgentBannerView.width) : base
+    }
+
     private var computedChinWidth: CGFloat {
         var chinWidth: CGFloat = vm.closedNotchSize.width
 
-        if coordinator.expandingView.type == .battery && coordinator.expandingView.show
+        if coordinator.lockAnimationRunning && vm.notchState == .closed {
+            chinWidth += 2 * 56
+        } else if coordinator.expandingView.type == .battery && coordinator.expandingView.show
             && vm.notchState == .closed && Defaults[.showPowerStatusNotifications]
         {
             chinWidth = 640
+        } else if agentActivityVisible {
+            chinWidth += 2 * agentSideWidth
         } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music)
             && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle)
             && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed
@@ -246,6 +294,12 @@ struct ContentView: View {
     func NotchLayout() -> some View {
         VStack(alignment: .leading) {
             VStack(alignment: .leading) {
+                // Приоритет того, что занимает закрытую «чёлку» (сверху вниз, побеждает первое подходящее):
+                // 1. приветствие  2. замок (блокировка/разблокировка)  3. запрос разрешения агента
+                // 4. уведомление о батарее  5. плашка громкости/яркости/микрофона
+                // 6. индикатор агента (с музыкой, если она играет)  7. музыка  8. заставка
+                // Развёрнутое уведомление агента (завершил/ошибка/ждёт) показывается под строкой
+                // и уступает пунктам 4–5 и музыкальному sneak peek.
                 if coordinator.helloAnimationRunning {
                     Spacer()
                     HelloAnimation(onFinish: {
@@ -257,7 +311,15 @@ struct ContentView: View {
                     .padding(.top, 40)
                     Spacer()
                 } else {
-                    if coordinator.expandingView.type == .battery && coordinator.expandingView.show
+                    if coordinator.lockAnimationRunning && vm.notchState == .closed {
+                        UnlockAnimationView(kind: coordinator.lockAnimationKind, notchWidth: vm.closedNotchSize.width)
+                            .id(coordinator.lockAnimationKind) // пересоздаём вид при смене блокировка/разблокировка
+                            .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
+                            .transition(.opacity)
+                    } else if agentPermissionVisible {
+                        // Запрос разрешения: нужно действие пользователя, поэтому он выше всех уведомлений
+                        AgentClosedRow()
+                    } else if coordinator.expandingView.type == .battery && coordinator.expandingView.show
                         && vm.notchState == .closed && Defaults[.showPowerStatusNotifications]
                     {
                         HStack(spacing: 0) {
@@ -286,7 +348,9 @@ struct ContentView: View {
                         .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
                       } else if coordinator.sneakPeek.show && Defaults[.inlineHUD] && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && vm.notchState == .closed {
                           InlineHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon, hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
-                              .transition(.opacity)
+                              .transition(.opacity.combined(with: .scale(scale: 0.88)))
+                      } else if agentActivityVisible {
+                          AgentClosedRow()
                       } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music) && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed {
                           MusicLiveActivity()
                               .frame(alignment: .center)
@@ -300,7 +364,15 @@ struct ContentView: View {
                            Rectangle().fill(.clear).frame(width: vm.closedNotchSize.width - 20, height: vm.effectiveClosedNotchHeight)
                        }
 
-                      if coordinator.sneakPeek.show {
+                      if agentPermissionVisible, let request = agentManager.currentPermission {
+                          AgentPermissionView(request: request, extraCount: agentManager.pendingPermissions.count - 1)
+                              .id(request.id)
+                      } else if agentBannerVisible, let banner = agentManager.banner {
+                          AgentBannerView(banner: banner)
+                              .id(banner.id)
+                      }
+
+                      if coordinator.sneakPeek.show && !agentPermissionVisible {
                           if (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && !Defaults[.inlineHUD] && vm.notchState == .closed {
                               SystemEventIndicatorModifier(
                                   eventType: $coordinator.sneakPeek.type,
@@ -337,6 +409,9 @@ struct ContentView: View {
                       }
                   }
               }
+              .conditionalModifier(agentExpanded) { view in
+                  view.fixedSize()
+              }
               .conditionalModifier((coordinator.sneakPeek.show && (coordinator.sneakPeek.type == .music) && vm.notchState == .closed && !vm.hideOnClosed && Defaults[.sneakPeekStyles] == .standard) || (coordinator.sneakPeek.show && (coordinator.sneakPeek.type != .music) && (vm.notchState == .closed))) { view in
                   view
                       .fixedSize()
@@ -349,6 +424,8 @@ struct ContentView: View {
                         NotchHomeView(albumArtNamespace: albumArtNamespace)
                     case .shelf:
                         ShelfView()
+                    case .agents:
+                        AgentsListView()
                     }
                 }
                 .transition(
@@ -385,21 +462,69 @@ struct ContentView: View {
         )
     }
 
+    /// Строка агента в закрытой «чёлке»: отдельно или вместе с музыкой
+    @ViewBuilder
+    func AgentClosedRow() -> some View {
+        Group {
+            if musicLiveActivityShown {
+                AgentMusicLiveActivity()
+            } else {
+                AgentActivityView(notchWidth: vm.closedNotchSize.width, rowWidth: agentRowWidth)
+            }
+        }
+        .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+    }
+
+    /// Строка закрытой «чёлки», когда одновременно играет музыка и работает агент:
+    /// слева обложка с тонкой рамкой, «крутящейся как диск», справа анимация нейросети
+    @ViewBuilder
+    func AgentMusicLiveActivity() -> some View {
+        if let session = agentManager.primary {
+            let artSize = max(0, vm.effectiveClosedNotchHeight - 12)
+            HStack(spacing: 0) {
+                SpinningAlbumDisc(image: musicManager.albumArt, size: artSize - 3, isPlaying: musicManager.isPlaying)
+                .padding(.leading, 3)
+                .frame(width: agentSideWidth, alignment: .leading)
+
+                Spacer(minLength: 0)
+                Rectangle().fill(.black).frame(width: vm.closedNotchSize.width)
+                Spacer(minLength: 0)
+
+                // Справа только значок нейросети (без эквалайзера): анимация музыки — вращающийся диск слева
+                AgentBadge(status: session.status, size: 22)
+                    .overlay(alignment: .topTrailing) {
+                        if agentManager.count > 1 {
+                            Text("\(agentManager.count)")
+                                .font(.system(size: 8, weight: .semibold).monospacedDigit())
+                                .foregroundStyle(.white.opacity(0.9))
+                                .frame(minWidth: 11, minHeight: 11)
+                                .background(Circle().fill(.black.opacity(0.85)))
+                                .overlay(Circle().stroke(.white.opacity(0.25), lineWidth: 0.5))
+                                .offset(x: 5, y: -4)
+                        }
+                    }
+                .padding(.trailing, 5)
+                .frame(width: agentSideWidth, alignment: .trailing)
+            }
+            .frame(width: agentRowWidth)
+            .animation(.smooth(duration: 0.35), value: session.status)
+            .help([session.agent, session.project, session.task].compactMap { $0 }.joined(separator: " · "))
+        }
+    }
+
     @ViewBuilder
     func MusicLiveActivity() -> some View {
+        // Одинаковая ширина боковых зон, чтобы вырез «чёлки» оставался по центру
+        let slot = max(0, vm.effectiveClosedNotchHeight - 12) + 4
         HStack {
-            Image(nsImage: musicManager.albumArt)
-                .resizable()
-                .clipped()
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: MusicPlayerImageSizes.cornerRadiusInset.closed)
-                )
-                .matchedGeometryEffect(id: "albumArt", in: albumArtNamespace)
-                .frame(
-                    width: max(0, vm.effectiveClosedNotchHeight - 12),
-                    height: max(0, vm.effectiveClosedNotchHeight - 12)
-                )
+            // Обложка — вращающийся диск (как и в режиме «музыка + нейросеть»)
+            SpinningAlbumDisc(
+                image: musicManager.albumArt,
+                size: max(0, vm.effectiveClosedNotchHeight - 12) - 3,
+                isPlaying: musicManager.isPlaying
+            )
+            .frame(width: slot, height: slot)
 
             Rectangle()
                 .fill(.black)
@@ -470,7 +595,7 @@ struct ContentView: View {
             .frame(
                 width: max(
                     0,
-                    vm.effectiveClosedNotchHeight - 12
+                    slot
                         + gestureProgress / 2
                 ),
                 height: max(
@@ -523,8 +648,10 @@ struct ContentView: View {
                 haptics.toggle()
             }
             
+            // Пока в «чёлке» висит запрос разрешения, она не должна сворачиваться или открываться под курсором
             guard vm.notchState == .closed,
                   !coordinator.sneakPeek.show,
+                  !agentPermissionVisible,
                   Defaults[.openNotchOnHover] else { return }
             
             hoverTask = Task {
@@ -534,6 +661,7 @@ struct ContentView: View {
                 await MainActor.run {
                     guard self.vm.notchState == .closed,
                           self.isHovering,
+                          !self.agentPermissionVisible,
                           !self.coordinator.sneakPeek.show else { return }
                     
                     self.doOpen()
