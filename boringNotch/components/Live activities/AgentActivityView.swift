@@ -145,7 +145,7 @@ struct AgentActivityView: View {
                 // Значок прижат к левому краю с небольшим отступом
                 AgentBadge(status: session.status)
                     .overlay(alignment: .topTrailing) { countBadge }
-                    .padding(.leading, 8)
+                    .padding(.leading, 7)   // значок на 1 пункт ближе к левому краю
                     .frame(width: Self.sideWidth, alignment: .leading)
 
                 Spacer(minLength: 0)

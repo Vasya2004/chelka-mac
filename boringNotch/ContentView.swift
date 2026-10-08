@@ -504,7 +504,7 @@ struct ContentView: View {
                                 .offset(x: 5, y: -4)
                         }
                     }
-                .padding(.trailing, 5)
+                .padding(.trailing, 4)   // значок на 1 пункт ближе к правому краю
                 .frame(width: agentSideWidth, alignment: .trailing)
             }
             .frame(width: agentRowWidth)
