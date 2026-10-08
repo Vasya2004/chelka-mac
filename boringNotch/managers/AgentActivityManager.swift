@@ -393,10 +393,10 @@ final class AgentActivityManager: ObservableObject {
         // Смена статуса: завершение, ошибка или ожидание — разворачиваем чёлку, возобновление работы — сворачиваем
         if previous?.status != event.status {
             switch event.status {
-            case .done:
-                // «Завершено» без предшествующей работы — это не наш агент (например, вспомогательная сессия): без плашки и звука
-                if previous?.status == .running || previous?.status == .waiting { showBanner(for: session) }
-            case .error, .waiting: showBanner(for: session)
+            case .done, .error, .waiting:
+                // «Завершено» показываем всегда, даже если приложение не видело начала работы (его могли перезапустить
+                // посреди задачи, а запись об агенте могла устареть). От двойных сигналов защищает ограничение в showBanner.
+                showBanner(for: session)
             case .running: if banner?.sessionID == event.id { hideBanner() }
             default: break
             }

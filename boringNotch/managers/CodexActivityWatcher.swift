@@ -15,6 +15,8 @@ final class CodexActivityWatcher {
     private var timer: Timer?
     /// Последнее состояние каждой сессии, о котором мы сообщили
     private var known: [String: AgentStatus] = [:]
+    /// Когда мы в последний раз напоминали менеджеру, что сессия ещё работает
+    private var heartbeat: [String: Date] = [:]
 
     func start() {
         guard timer == nil else { return }
@@ -46,12 +48,19 @@ final class CodexActivityWatcher {
             let previous = known[snap.id]
             switch snap.status {
             case .running where previous != .running:
+                heartbeat[snap.id] = Date()
                 manager.report(id: snap.id, agent: "Codex", status: .running, task: nil, project: snap.project, cwd: snap.cwd)
             case .done where previous == .running:
                 // «Закончил» показываем только если видели, как он работал (иначе это старая сессия)
                 manager.report(id: snap.id, agent: "Codex", status: .done, task: nil, project: snap.project, cwd: snap.cwd)
             case .end where previous == .running:
                 manager.report(id: snap.id, agent: "Codex", status: .end, task: nil, project: snap.project, cwd: snap.cwd)
+            case .running where previous == .running:
+                // Долгий ход: раз в минуту подтверждаем «работает», чтобы запись в менеджере не истекла до завершения
+                if Date().timeIntervalSince(heartbeat[snap.id] ?? .distantPast) > 60 {
+                    heartbeat[snap.id] = Date()
+                    manager.report(id: snap.id, agent: "Codex", status: .running, task: nil, project: snap.project, cwd: snap.cwd)
+                }
             default:
                 break
             }
