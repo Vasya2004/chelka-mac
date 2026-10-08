@@ -94,7 +94,7 @@ struct ContentView: View {
     }
 
     /// Ширина боковой части строки: при совмещении с музыкой она чуть шире
-    private var agentSideWidth: CGFloat { musicLiveActivityShown ? 40 : AgentActivityView.sideWidth }
+    private var agentSideWidth: CGFloat { musicLiveActivityShown ? 29 : AgentActivityView.sideWidth }
 
     private var agentRowWidth: CGFloat {
         let base = vm.closedNotchSize.width + 2 * agentSideWidth

@@ -38,6 +38,10 @@ struct CheckStrokeShape: Shape {
 }
 
 enum AgentBadgeArt {
+    /// Во сколько раз эффекты (свечение, волна) могут быть шире самого значка. Строка «чёлки» (32 пт) выше значка (22 пт)
+    /// всего в ~1,45 раза, поэтому берём с запасом 1,3: ничего не вылезает за границы «чёлки».
+    static let reach: CGFloat = 1.3
+
     /// Толщина кольца относительно размера значка
     static func lineWidth(_ size: CGFloat) -> CGFloat { max(1.2, size * 0.07) }
 
@@ -60,8 +64,8 @@ enum AgentBadgeArt {
                 // мягкое «дыхание» свечения за кольцом
                 Circle()
                     .fill(RadialGradient(colors: [tint.opacity(0.07 + 0.05 * breathe), .clear],
-                                         center: .center, startRadius: 0, endRadius: size * 0.95))
-                    .frame(width: size * 1.9, height: size * 1.9)
+                                         center: .center, startRadius: 0, endRadius: size * AgentBadgeArt.reach / 2))
+                    .frame(width: size * AgentBadgeArt.reach, height: size * AgentBadgeArt.reach)
 
                 Circle().stroke(tint.opacity(0.14), lineWidth: lw)
 
@@ -105,9 +109,11 @@ enum AgentBadgeArt {
                 if let p = ripple, p < 1 {
                     Circle()
                         .stroke(tint.opacity((1 - p) * 0.55), lineWidth: lw * (1 - 0.5 * p))
-                        .scaleEffect(1 + 0.75 * p)
+                        .scaleEffect(1 + (AgentBadgeArt.reach - 1) * p)
                 }
             }
+            .frame(width: size * AgentBadgeArt.reach, height: size * AgentBadgeArt.reach)
+            .clipShape(Circle())   // ни один эффект не выходит за границы отведённого круга
             .frame(width: size, height: size)
         }
     }
@@ -127,8 +133,8 @@ enum AgentBadgeArt {
             ZStack {
                 Circle()
                     .fill(RadialGradient(colors: [tint.opacity(0.10 * (0.5 + breath)), .clear],
-                                         center: .center, startRadius: 0, endRadius: size * 0.95))
-                    .frame(width: size * 1.9, height: size * 1.9)
+                                         center: .center, startRadius: 0, endRadius: size * AgentBadgeArt.reach / 2))
+                    .frame(width: size * AgentBadgeArt.reach, height: size * AgentBadgeArt.reach)
                 Circle()
                     .stroke(tint.opacity(0.30 + 0.55 * breath), lineWidth: lw)
                     .scaleEffect(0.95 + 0.07 * breath)
@@ -137,6 +143,8 @@ enum AgentBadgeArt {
                     .foregroundStyle(tint)
                     .rotationEffect(.degrees(wave), anchor: .bottom)
             }
+            .frame(width: size * AgentBadgeArt.reach, height: size * AgentBadgeArt.reach)
+            .clipShape(Circle())
             .frame(width: size, height: size)
         }
     }
@@ -163,7 +171,9 @@ enum AgentBadgeArt {
                     .frame(width: size * 0.42, height: size * 0.32)
                     .offset(y: size * 0.01)
             }
-            .shadow(color: tint.opacity(0.45 * progress), radius: size * 0.18)
+            .shadow(color: tint.opacity(0.45 * progress), radius: size * 0.14)
+            .frame(width: size * AgentBadgeArt.reach, height: size * AgentBadgeArt.reach)
+            .clipShape(Circle())
             .frame(width: size, height: size)
         }
     }
@@ -186,7 +196,9 @@ enum AgentBadgeArt {
                 }
                 .rotationEffect(.degrees(wobble))
             }
-            .shadow(color: tint.opacity(0.4), radius: size * 0.15)
+            .shadow(color: tint.opacity(0.4), radius: size * 0.12)
+            .frame(width: size * AgentBadgeArt.reach, height: size * AgentBadgeArt.reach)
+            .clipShape(Circle())
             .frame(width: size, height: size)
         }
     }
