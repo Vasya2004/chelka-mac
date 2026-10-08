@@ -55,6 +55,12 @@ struct IdleArt: View {
             case .pong: IdlePong.draw(in: &context, zones: zones, t: t)
             case .fireflies: IdleFireflies.draw(in: &context, zones: zones, t: t)
             case .face: IdleFace.draw(in: &context, zones: zones, t: t)
+            case .fish: IdleFish.draw(in: &context, zones: zones, t: t)
+            case .snake: IdleSnake.draw(in: &context, zones: zones, t: t)
+            case .clock: IdleClock.draw(in: &context, zones: zones, t: t)
+            case .chomp: IdleChomp.draw(in: &context, zones: zones, t: t)
+            case .matrix: IdleMatrix.draw(in: &context, zones: zones, t: t)
+            case .rain: IdleRain.draw(in: &context, zones: zones, t: t)
             }
         }
     }
@@ -93,7 +99,7 @@ private struct Sprite {
 
     /// Рисует спрайт так, что (x, bottom) — середина нижнего края; flip — смотрит влево
     func draw(in context: inout GraphicsContext, x: CGFloat, bottom: CGFloat, pixel: CGFloat,
-              color: Color, accent: Color, flip: Bool) {
+              color: Color, accent: Color, flip: Bool, dark: Color = Color(red: 0.42, green: 0.2, blue: 0.06)) {
         let originX = (x - CGFloat(width) * pixel / 2).rounded()
         let originY = (bottom - CGFloat(height) * pixel).rounded()
         for (row, line) in rows.enumerated() {
@@ -101,7 +107,7 @@ private struct Sprite {
                 let c = flip ? width - 1 - col : col
                 let rect = CGRect(x: originX + CGFloat(c) * pixel, y: originY + CGFloat(row) * pixel,
                                   width: pixel, height: pixel)
-                let fill = char == "#" ? color : char == "o" ? accent : Color(red: 0.42, green: 0.2, blue: 0.06)
+                let fill = char == "#" ? color : char == "o" ? accent : dark
                 context.fill(Path(rect), with: .color(fill))
             }
         }
@@ -357,5 +363,317 @@ private enum IdleFace {
         mouth.move(to: CGPoint(x: c.x - 7, y: c.y + 4))
         mouth.addQuadCurve(to: CGPoint(x: c.x + 7, y: c.y + 4), control: CGPoint(x: c.x, y: c.y + 10))
         context.stroke(mouth, with: .color(.white), lineWidth: 2)
+    }
+}
+
+// MARK: - Аквариум
+
+/// Пиксельная рыбка плавает туда-обратно сквозь чёлку, навстречу ей — мальки, со дна поднимаются пузырьки
+private enum IdleFish {
+    static let fish = Sprite(rows: [
+        "....###...",
+        "#..#####..",
+        "##########",
+        "##.#####o#",
+        "#..#####..",
+        "....###...",
+    ])
+    static let fry = Sprite(rows: [
+        ".##.",
+        "####",
+        ".##.",
+    ])
+    static let body = Color(red: 1.0, green: 0.55, blue: 0.2)
+    static let eye = Color.black
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let pixel: CGFloat = 2
+
+        // Пузырьки в обеих зонах
+        for (index, zone) in [zones.left, zones.right].enumerated() {
+            for i in 0..<3 {
+                let seed = Double(index * 3 + i)
+                let phase = (t / (2.6 + seed * 0.3) + seed * 0.37).truncatingRemainder(dividingBy: 1)
+                let x = zone.minX + zone.width * CGFloat(0.2 + 0.3 * Double(i)) + CGFloat(sin(t * 2 + seed)) * 1.5
+                let y = h - 2 - CGFloat(phase) * (h - 4)
+                let r: CGFloat = 1 + CGFloat(phase) * 1.2
+                context.stroke(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                               with: .color(.white.opacity(0.55 * (1 - phase))), lineWidth: 0.8)
+            }
+        }
+
+        // Большая рыба: 9 секунд в одну сторону, разворот, обратно
+        let cycle = 18.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let forward = local < cycle / 2
+        let p = CGFloat(forward ? local / (cycle / 2) : 1 - (local - cycle / 2) / (cycle / 2))
+        let x = -12 + (w + 24) * p
+        let y = h * 0.55 + CGFloat(sin(t * 2.2)) * 2.5
+        // Хвост виляет: раз в 0,25 с спрайт чуть сдвигается
+        let wiggle: CGFloat = Int(t * 4) % 2 == 0 ? 0 : 0.5
+        fish.draw(in: &context, x: x + wiggle, bottom: y + 6, pixel: pixel, color: body, accent: eye, flip: !forward)
+
+        // Стайка мальков плывёт навстречу
+        for i in 0..<3 {
+            let q = CGFloat(((t / 11) + Double(i) * 0.06).truncatingRemainder(dividingBy: 1))
+            let fx = forward ? w + 10 - (w + 20) * q : -10 + (w + 20) * q
+            let fy = h * 0.32 + CGFloat(i) * 3 + CGFloat(sin(t * 3 + Double(i))) * 1.5
+            fry.draw(in: &context, x: fx + CGFloat(i) * 5, bottom: fy, pixel: 1.5,
+                     color: Color(red: 0.45, green: 0.85, blue: 1.0), accent: .white, flip: forward)
+        }
+    }
+}
+
+// MARK: - Змейка
+
+/// Классическая змейка: ползёт по кругу сквозь чёлку и съедает яблоки, которые снова вырастают
+private enum IdleSnake {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let cell: CGFloat = 3
+        let w = zones.size.width
+        let h = zones.size.height
+        // Контур пути: верхняя линия → вниз в правой зоне → нижняя линия → вверх в левой зоне
+        let left = (zones.left.minX + 6) / cell
+        let right = (w - 6) / cell - 1
+        let top = (h * 0.28 / cell).rounded()
+        let bottom = (h * 0.72 / cell).rounded()
+        let horizontal = right - left
+        let vertical = bottom - top
+        let length = 2 * (horizontal + vertical)
+
+        func point(_ s: CGFloat) -> CGPoint {
+            var s = s.truncatingRemainder(dividingBy: length)
+            if s < 0 { s += length }
+            if s < horizontal { return CGPoint(x: left + s, y: top) }
+            s -= horizontal
+            if s < vertical { return CGPoint(x: right, y: top + s) }
+            s -= vertical
+            if s < horizontal { return CGPoint(x: right - s, y: bottom) }
+            s -= horizontal
+            return CGPoint(x: left, y: bottom - s)
+        }
+        func rect(_ p: CGPoint) -> CGRect {
+            CGRect(x: p.x.rounded() * cell, y: p.y.rounded() * cell, width: cell - 0.5, height: cell - 0.5)
+        }
+
+        let head = CGFloat(t * 14)   // клеток в секунду
+        // Яблоки стоят в боковых зонах; съеденное вырастает через четверть круга
+        let apples: [CGFloat] = [horizontal + vertical * 0.5, 2 * horizontal + vertical * 1.5]
+        for apple in apples {
+            var ahead = (apple - head).truncatingRemainder(dividingBy: length)
+            if ahead < 0 { ahead += length }
+            if ahead < length * 0.75 {
+                context.fill(Path(rect(point(apple))), with: .color(Color(red: 1, green: 0.3, blue: 0.3)))
+            }
+        }
+        // Тело: от хвоста к голове, голова ярче
+        let segments = 9
+        for i in stride(from: segments - 1, through: 0, by: -1) {
+            let alpha = i == 0 ? 1 : 0.85 - Double(i) * 0.06
+            context.fill(Path(rect(point(head.rounded(.down) - CGFloat(i)))),
+                         with: .color(Color(red: 0.4, green: 0.95, blue: 0.45).opacity(alpha)))
+        }
+    }
+}
+
+// MARK: - Пиксельные часы
+
+/// Часы слева от чёлки, минуты — справа; точки-разделители мигают раз в секунду
+private enum IdleClock {
+    /// Цифры 3×5
+    static let digits: [[String]] = [
+        ["###", "#.#", "#.#", "#.#", "###"], [".#.", "##.", ".#.", ".#.", "###"],
+        ["###", "..#", "###", "#..", "###"], ["###", "..#", "###", "..#", "###"],
+        ["#.#", "#.#", "###", "..#", "..#"], ["###", "#..", "###", "..#", "###"],
+        ["###", "#..", "###", "#.#", "###"], ["###", "..#", ".#.", ".#.", ".#."],
+        ["###", "#.#", "###", "#.#", "###"], ["###", "#.#", "###", "..#", "###"],
+    ]
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let date = Date(timeIntervalSinceReferenceDate: t)
+        let parts = Calendar.current.dateComponents([.hour, .minute, .second], from: date)
+        let hour = parts.hour ?? 0
+        let minute = parts.minute ?? 0
+        let pixel: CGFloat = 2
+        let h = zones.size.height
+        let top = ((h - 5 * pixel) / 2).rounded()
+        let color = Color.white.opacity(0.92)
+        let blink = t.truncatingRemainder(dividingBy: 1) < 0.5
+
+        func drawNumber(_ value: Int, centerX: CGFloat) {
+            let text = String(format: "%02d", value)
+            let width = (3 * 2 + 1) * pixel
+            var x = (centerX - width / 2).rounded()
+            for char in text {
+                let rows = digits[Int(String(char)) ?? 0]
+                for (r, line) in rows.enumerated() {
+                    for (c, ch) in line.enumerated() where ch == "#" {
+                        context.fill(Path(CGRect(x: x + CGFloat(c) * pixel, y: top + CGFloat(r) * pixel, width: pixel, height: pixel)),
+                                     with: .color(color))
+                    }
+                }
+                x += 4 * pixel
+            }
+        }
+        drawNumber(hour, centerX: zones.left.midX - 2)
+        drawNumber(minute, centerX: zones.right.midX + 2)
+
+        // Разделитель «:» разрезан чёлкой: по точке у внутреннего края каждой зоны
+        if blink {
+            for x in [zones.left.maxX - 5, zones.right.minX + 3] {
+                for dy in [pixel * 1, pixel * 3] {
+                    context.fill(Path(CGRect(x: x, y: top + dy, width: pixel, height: pixel)), with: .color(color))
+                }
+            }
+        }
+        // Секунды: тонкая полоска под минутами
+        let progress = CGFloat(parts.second ?? 0) / 60
+        let barWidth = zones.right.width - 10
+        context.fill(Path(CGRect(x: zones.right.minX + 6, y: top + 5 * pixel + 3, width: barWidth * progress, height: 1)),
+                     with: .color(.white.opacity(0.35)))
+    }
+}
+
+// MARK: - Пожиратель точек
+
+/// Жёлтый «колобок» с открывающимся ртом съедает дорожку точек, за ним гонится привидение
+private enum IdleChomp {
+    static let ghost = Sprite(rows: [
+        "..####..",
+        ".######.",
+        "#oo##oo#",
+        "#-o##-o#",
+        "########",
+        "########",
+        "##.##.##",
+    ])
+    static let ghostAlt = Sprite(rows: [
+        "..####..",
+        ".######.",
+        "#oo##oo#",
+        "#-o##-o#",
+        "########",
+        "########",
+        "#.##.##.",
+    ])
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let y = h / 2
+        let travel = w + 60
+        let speed = 26.0
+        let x = CGFloat((t * speed).truncatingRemainder(dividingBy: Double(travel))) - 20
+
+        // Точки впереди целы, позади — съедены (на новом круге всё восстанавливается)
+        var dot = CGFloat(6)
+        while dot < w - 3 {
+            if dot > x + 2 {
+                context.fill(Path(CGRect(x: dot - 1, y: y - 1, width: 2, height: 2)), with: .color(Color(red: 1, green: 0.85, blue: 0.7)))
+            }
+            dot += 7
+        }
+
+        // Рот открывается и закрывается 8 раз в секунду
+        let radius: CGFloat = 6
+        let mouth = Angle.degrees(4 + 36 * abs(sin(t * .pi * 4)))
+        var body = Path()
+        body.move(to: CGPoint(x: x, y: y))
+        body.addArc(center: CGPoint(x: x, y: y), radius: radius, startAngle: mouth, endAngle: -mouth, clockwise: false)
+        body.closeSubpath()
+        context.fill(body, with: .color(Color(red: 1, green: 0.86, blue: 0.2)))
+
+        let ghostSprite = Int(t * 5) % 2 == 0 ? ghost : ghostAlt
+        ghostSprite.draw(in: &context, x: x - 24, bottom: y + 7 + CGFloat(sin(t * 6)), pixel: 1.75,
+                         color: Color(red: 1, green: 0.45, blue: 0.75), accent: .white, flip: false,
+                         dark: Color(red: 0.15, green: 0.2, blue: 0.75))
+    }
+}
+
+// MARK: - Матрица
+
+/// Зелёные символы стекают колонками по бокам чёлки
+private enum IdleMatrix {
+    static let glyphs = Array("01アイウエオカキクケコサシスセソﾊﾐﾋｰｳｼﾅﾓﾆ<>*+")
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let step: CGFloat = 6
+        for (zoneIndex, zone) in [zones.left, zones.right].enumerated() {
+            let columns = Int(zone.width / step) - 1
+            for column in 0..<columns {
+                let seed = Double(zoneIndex * 31 + column * 7)
+                let speed = 18 + (seed.truncatingRemainder(dividingBy: 5)) * 4
+                let span = Double(h) + 30
+                let headY = CGFloat((t * speed + seed * 13).truncatingRemainder(dividingBy: span)) - 6
+                let x = zone.minX + step * (CGFloat(column) + 0.9)
+                for i in 0..<5 {
+                    let y = headY - CGFloat(i) * step
+                    guard y > -step, y < h + step else { continue }
+                    // Символ меняется со временем, но не каждый кадр
+                    let index = abs(Int(seed) * 17 + i * 5 + Int(t * 3) * (i == 0 ? 7 : 1)) % glyphs.count
+                    let color = i == 0 ? Color(red: 0.85, green: 1, blue: 0.88) : Color(red: 0.2, green: 0.95, blue: 0.4).opacity(1 - Double(i) * 0.19)
+                    let text = Text(String(glyphs[index])).font(.system(size: 6, weight: .bold, design: .monospaced)).foregroundColor(color)
+                    context.draw(text, at: CGPoint(x: x, y: y))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Дождь
+
+/// Над каждой зоной — пиксельная тучка: идёт дождь, капли разбиваются о «пол», иногда бьёт молния
+private enum IdleRain {
+    static let cloud = Sprite(rows: [
+        "...####.....",
+        ".#########..",
+        "############",
+        ".##########.",
+    ])
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let pixel: CGFloat = 2
+        let cloudBottom: CGFloat = 4 + 4 * pixel
+        // Молния: раз в 7 секунд по очереди в одной из зон, с двойной вспышкой
+        let flashCycle = t.truncatingRemainder(dividingBy: 7)
+        let flashZone = Int(t / 7) % 2
+        let flashing = flashCycle < 0.12 || (flashCycle > 0.2 && flashCycle < 0.3)
+
+        for (index, zone) in [zones.left, zones.right].enumerated() {
+            let lit = flashing && index == flashZone
+            cloud.draw(in: &context, x: zone.midX, bottom: cloudBottom, pixel: pixel,
+                       color: lit ? .white : Color(white: 0.62), accent: .white, flip: index == 1)
+
+            if lit {
+                var bolt = Path()
+                let x = zone.midX + 2
+                bolt.move(to: CGPoint(x: x, y: cloudBottom))
+                bolt.addLine(to: CGPoint(x: x - 4, y: cloudBottom + 7))
+                bolt.addLine(to: CGPoint(x: x + 1, y: cloudBottom + 7))
+                bolt.addLine(to: CGPoint(x: x - 3, y: h - 2))
+                context.stroke(bolt, with: .color(Color(red: 1, green: 0.95, blue: 0.5)), lineWidth: 1.5)
+            }
+
+            // Капли: короткие черточки, у пола — брызги
+            for i in 0..<6 {
+                let seed = Double(index * 6 + i)
+                let fall = (t * 1.6 + seed * 0.37).truncatingRemainder(dividingBy: 1)
+                let x = zone.minX + 6 + CGFloat(i) * (zone.width - 12) / 5
+                let y = cloudBottom + CGFloat(fall) * (h - cloudBottom - 2)
+                if fall < 0.92 {
+                    context.fill(Path(CGRect(x: x, y: y, width: 1, height: 3)),
+                                 with: .color(Color(red: 0.55, green: 0.75, blue: 1).opacity(0.85)))
+                } else {
+                    for dx in [-2.0, 2.0] {
+                        context.fill(Path(CGRect(x: x + CGFloat(dx), y: h - 3, width: 1, height: 1)),
+                                     with: .color(Color(red: 0.55, green: 0.75, blue: 1).opacity(0.6)))
+                    }
+                }
+            }
+        }
     }
 }
