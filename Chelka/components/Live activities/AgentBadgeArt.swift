@@ -50,7 +50,7 @@ enum AgentBadgeArt {
     static func lineWidth(_ size: CGFloat) -> CGFloat { max(1.2, size * 0.07) }
 
     /// Общая обёртка: рисуем в области `reach`, обрезаем по кругу и сообщаем верстке размер `size`
-    fileprivate struct Frame<Content: View>: View {
+    struct Frame<Content: View>: View {
         let size: CGFloat
         @ViewBuilder let content: () -> Content
         var body: some View {
@@ -62,7 +62,7 @@ enum AgentBadgeArt {
     }
 
     /// Волна от кольца (прогресс p от 0 до 1)
-    fileprivate static func rippleRing(_ p: Double, ring: CGFloat, lw: CGFloat, tint: Color, strength: Double) -> some View {
+    static func rippleRing(_ p: Double, ring: CGFloat, lw: CGFloat, tint: Color, strength: Double) -> some View {
         Circle()
             .stroke(tint.opacity((1 - p) * strength), lineWidth: lw * (1 - 0.5 * p))
             .frame(width: ring, height: ring)
@@ -249,10 +249,14 @@ enum AgentBadgeArt {
     // MARK: - Готово: кольцо замыкается, галочка дорисовывается
 
     /// - Parameter progress: 0...1 — насколько замкнуто кольцо и нарисована галочка
-    struct Done: View {
-        let progress: Double
+    struct Done: View, Animatable {
+        var progress: Double
         let size: CGFloat
         let tint: Color
+        var animatableData: Double {
+            get { progress }
+            set { progress = newValue }
+        }
 
         var body: some View {
             let lw = AgentBadgeArt.lineWidth(size)

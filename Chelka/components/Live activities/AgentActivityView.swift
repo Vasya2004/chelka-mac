@@ -16,6 +16,7 @@ struct AgentBadge: View {
 
     @ObservedObject private var manager = AgentActivityManager.shared
     @Default(.agentRunningStyle) private var runningStyle
+    @Default(.doneStyle) private var doneStyle
     @State private var rippleStart: Date?
     @State private var doneProgress: Double = 0
     @State private var wobble: Double = 0
@@ -38,7 +39,7 @@ struct AgentBadge: View {
                 case .waiting:
                     AgentBadgeArt.Waiting(t: t, size: size, tint: tint)
                 case .done:
-                    AgentBadgeArt.Done(progress: doneProgress, size: size, tint: tint)
+                    AgentDoneArt(style: doneStyle, progress: doneProgress, size: size, tint: tint)
                 case .error:
                     AgentBadgeArt.Failed(size: size, tint: tint, wobble: wobble)
                 case .end:
@@ -52,7 +53,7 @@ struct AgentBadge: View {
             switch new {
             case .done:
                 doneProgress = 0
-                withAnimation(.easeOut(duration: 0.55)) { doneProgress = 1 }
+                withAnimation(doneStyle == .check ? .easeOut(duration: doneStyle.duration) : .linear(duration: doneStyle.duration)) { doneProgress = 1 }
             case .error:
                 wobble = 16
                 withAnimation(.interpolatingSpring(stiffness: 260, damping: 4)) { wobble = 0 }
@@ -152,6 +153,12 @@ struct AlbumCover: View {
             SquareCover(image: image, size: size, glow: false, isPlaying: isPlaying)
         case .glow:
             SquareCover(image: image, size: size, glow: true, isPlaying: isPlaying)
+        case .beat:
+            BeatCover(image: image, size: size, isPlaying: isPlaying)
+        case .radial:
+            RadialCover(image: image, size: size, isPlaying: isPlaying)
+        case .rainbow:
+            RainbowDisc(image: image, size: size, isPlaying: isPlaying)
         }
     }
 }
@@ -256,6 +263,26 @@ struct AgentRunningArt: View {
         case .comet: AgentBadgeArt.Running(t: t, size: size, tint: tint, ripple: ripple)
         case .pulse: AgentBadgeArt.RunningPulse(t: t, size: size, tint: tint, ripple: ripple)
         case .orbit: AgentBadgeArt.RunningOrbit(t: t, size: size, tint: tint, ripple: ripple)
+        case .aurora: AgentBadgeArt.RunningAurora(t: t, size: size, tint: tint, ripple: ripple)
+        case .radar: AgentBadgeArt.RunningRadar(t: t, size: size, tint: tint, ripple: ripple)
+        case .galaxy: AgentBadgeArt.RunningGalaxy(t: t, size: size, tint: tint, ripple: ripple)
+        case .heartbeat: AgentBadgeArt.RunningHeartbeat(t: t, size: size, tint: tint, ripple: ripple)
+        }
+    }
+}
+
+/// Эффект завершения выбранного варианта (галочка, конфетти, вспышка)
+struct AgentDoneArt: View {
+    let style: DoneStyle
+    let progress: Double
+    let size: CGFloat
+    let tint: Color
+
+    var body: some View {
+        switch style {
+        case .check: AgentBadgeArt.Done(progress: progress, size: size, tint: tint)
+        case .confetti: AgentBadgeArt.DoneConfetti(progress: progress, size: size, tint: tint)
+        case .starburst: AgentBadgeArt.DoneStarburst(progress: progress, size: size, tint: tint)
         }
     }
 }
@@ -285,6 +312,17 @@ struct AgentSideContent: View {
                 .frame(maxWidth: 44)
                 .contentTransition(.interpolate)
                 .animation(.smooth(duration: 0.25), value: task)
+        case .wave:
+            TimelineView(.animation) { AgentBadgeArt.Wave(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
+        case .rain:
+            TimelineView(.animation) { AgentBadgeArt.Rain(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
+        case .typewriter:
+            TimelineView(.animation) {
+                AgentBadgeArt.Typewriter(t: $0.date.timeIntervalSinceReferenceDate,
+                                         text: task?.isEmpty == false ? task! : "thinking", tint: tint)
+            }
+        case .shimmer:
+            TimelineView(.animation) { AgentBadgeArt.Shimmer(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
         }
     }
 }

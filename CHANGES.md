@@ -29,7 +29,11 @@ Chelka is a modified version of [Boring Notch](https://github.com/TheBoredTeam/b
 - Redesigned inline volume/brightness HUD (`InlineHUD`), enabled by default.
 
 ## Animations
-- Settings → Animations: pick the agent working indicator (Comet / Pulse / Orbit), the right-hand element when only an agent is active (Timer / Equalizer / Typing dots / Current tool) and the album cover style (Spinning disc / Square cover / Glowing cover), each with a live preview.
+- Settings → Animations, each option with a live preview:
+  - agent working indicator: Comet, Pulse, Orbit, Aurora, Radar, Galaxy, Heartbeat;
+  - right-hand element when only an agent is active: Timer, Equalizer, Typing dots, Current tool, Wave, Rain, Typewriter, Shimmer;
+  - album cover: Spinning disc, Square cover, Glowing cover, Beat, Radial bars, Rainbow disc;
+  - completion effect: Check, Confetti, Starburst.
 
 ## Settings
 - New toggles under Settings → Advanced: lock animation and sound, AI agent activity, completion banner and sound, permission prompts in the notch, usage limits on the home screen.

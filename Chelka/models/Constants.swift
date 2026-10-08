@@ -46,25 +46,47 @@ extension Notification.Name {
 
 /// Индикатор работы агента (кольцо справа от музыки или слева, если музыки нет)
 enum AgentRunningStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case comet, pulse, orbit
+    case comet, pulse, orbit, aurora, radar, galaxy, heartbeat
     var id: String { rawValue }
-    var title: String { switch self { case .comet: return "Comet"; case .pulse: return "Pulse"; case .orbit: return "Orbit" } }
+    var title: String {
+        switch self {
+        case .comet: return "Comet"; case .pulse: return "Pulse"; case .orbit: return "Orbit"
+        case .aurora: return "Aurora"; case .radar: return "Radar"; case .galaxy: return "Galaxy"; case .heartbeat: return "Heartbeat"
+        }
+    }
 }
 
 /// Что показывать справа, когда активна только нейросеть (без музыки)
 enum AgentSideStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case timer, equalizer, dots, tool
+    case timer, equalizer, dots, tool, wave, rain, typewriter, shimmer
     var id: String { rawValue }
     var title: String {
-        switch self { case .timer: return "Timer"; case .equalizer: return "Equalizer"; case .dots: return "Typing dots"; case .tool: return "Current tool" }
+        switch self {
+        case .timer: return "Timer"; case .equalizer: return "Equalizer"; case .dots: return "Typing dots"; case .tool: return "Current tool"
+        case .wave: return "Wave"; case .rain: return "Rain"; case .typewriter: return "Typewriter"; case .shimmer: return "Shimmer"
+        }
     }
 }
 
 /// Вид обложки альбома в закрытой «чёлке»
 enum CoverStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case disc, rounded, glow
+    case disc, rounded, glow, beat, radial, rainbow
     var id: String { rawValue }
-    var title: String { switch self { case .disc: return "Spinning disc"; case .rounded: return "Square cover"; case .glow: return "Glowing cover" } }
+    var title: String {
+        switch self {
+        case .disc: return "Spinning disc"; case .rounded: return "Square cover"; case .glow: return "Glowing cover"
+        case .beat: return "Beat"; case .radial: return "Radial bars"; case .rainbow: return "Rainbow disc"
+        }
+    }
+}
+
+/// Эффект, когда агент закончил работу
+enum DoneStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
+    case check, confetti, starburst
+    var id: String { rawValue }
+    var title: String { switch self { case .check: return "Check"; case .confetti: return "Confetti"; case .starburst: return "Starburst" } }
+    /// Сколько длится анимация завершения
+    var duration: Double { self == .check ? 0.55 : 1.0 }
 }
 
 // Media controller types for selection in settings
@@ -127,6 +149,7 @@ extension Defaults.Keys {
     static let agentRunningStyle = Key<AgentRunningStyle>("agentRunningStyle", default: .comet)
     static let agentSideStyle = Key<AgentSideStyle>("agentSideStyle", default: .timer)
     static let coverStyle = Key<CoverStyle>("coverStyle", default: .disc)
+    static let doneStyle = Key<DoneStyle>("doneStyle", default: .check)
     static let playLockSound = Key<Bool>("playLockSound", default: true)
     static let hideFromScreenRecording = Key<Bool>("hideFromScreenRecording", default: false)
     

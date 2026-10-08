@@ -13,6 +13,7 @@ struct AnimationSettings: View {
     @Default(.agentRunningStyle) private var runningStyle
     @Default(.agentSideStyle) private var sideStyle
     @Default(.coverStyle) private var coverStyle
+    @Default(.doneStyle) private var doneStyle
     @ObservedObject private var music = MusicManager.shared
     /// Момент «начала работы» для превью таймера
     @State private var previewStart = Date().addingTimeInterval(-74)
@@ -88,10 +89,32 @@ struct AnimationSettings: View {
             }
 
             Section {
+                LazyVGrid(columns: columns, spacing: 14) {
+                    ForEach(DoneStyle.allCases) { style in
+                        StyleCard(title: style.title, selected: doneStyle == style, action: { doneStyle = style }) {
+                            TimelineView(.animation) { timeline in
+                                // превью повторяется: эффект, пауза, снова эффект
+                                let cycle = style.duration + 1.4
+                                let local = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle)
+                                AgentDoneArt(style: style, progress: min(1, local / style.duration), size: 34,
+                                             tint: Color(red: 0.38, green: 0.84, blue: 0.56))
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Completion effect")
+            } footer: {
+                Text("Plays on the agent badge when an agent finishes its work.")
+            }
+
+            Section {
                 Button("Restore defaults") {
                     runningStyle = .comet
                     sideStyle = .timer
                     coverStyle = .disc
+                    doneStyle = .check
                 }
             }
         }
