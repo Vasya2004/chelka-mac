@@ -204,27 +204,37 @@ enum AgentBadgeArt {
         }
     }
 
-    // MARK: - Эквалайзер (режим «только агент»)
+    // MARK: - Таймер работы (режим «только агент»)
 
-    /// Пять тонких столбиков с «живым» неравномерным движением
-    struct Equalizer: View {
-        let t: Double
+    /// «2:14» до часа, затем «1.2ч», а после 10 часов «12ч» (компактно, чтобы помещалось в боковую зону)
+    static func elapsedText(_ seconds: Int) -> String {
+        let s = max(0, seconds)
+        if s >= 36000 { return String(format: "%dч", s / 3600) }
+        if s >= 3600 { return String(format: "%.1fч", Double(s) / 3600) }
+        return String(format: "%d:%02d", s / 60, s % 60)
+    }
+
+    /// Пульсирующая точка и тикающий таймер: сколько уже работает агент
+    struct Elapsed: View {
+        let seconds: Int
         let tint: Color
+        /// 0...1 — фаза пульсации точки
+        var pulse: Double = 1
 
         var body: some View {
-            HStack(alignment: .center, spacing: 2.6) {
-                ForEach(0..<5, id: \.self) { i in
-                    let p = Double(i)
-                    // два наложенных колебания разной частоты дают неповторяющийся ритм
-                    let a = sin(t * (3.1 + p * 0.55) + p * 1.7)
-                    let b = sin(t * (5.3 - p * 0.35) + p * 0.9)
-                    let level = 0.5 + 0.5 * (0.62 * a + 0.38 * b)
-                    Capsule()
-                        .fill(LinearGradient(colors: [tint, tint.opacity(0.55)], startPoint: .top, endPoint: .bottom))
-                        .frame(width: 2.2, height: 3 + 11.5 * level)
-                }
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(tint)
+                    .frame(width: 4.5, height: 4.5)
+                    .opacity(0.45 + 0.55 * pulse)
+                    .shadow(color: tint.opacity(0.7 * pulse), radius: 3)
+                Text(AgentBadgeArt.elapsedText(seconds))
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(tint.opacity(0.88))
+                    .contentTransition(.numericText(value: Double(seconds)))
+                    .lineLimit(1)
+                    .fixedSize()
             }
-            .frame(height: 17)
         }
     }
 }

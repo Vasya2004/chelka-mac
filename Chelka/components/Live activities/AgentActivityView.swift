@@ -154,7 +154,7 @@ struct AgentActivityView: View {
 
                 ZStack {
                     if session.status == .running {
-                        AgentEqualizer(tint: tint).transition(.opacity)
+                        AgentElapsedTimer(since: session.since, tint: tint).transition(.opacity)
                     } else {
                         Text(session.status.label)
                             .font(.system(size: 10.5, weight: .medium))
@@ -187,13 +187,19 @@ struct AgentActivityView: View {
     }
 }
 
-/// Эквалайзер «только агент»: пять столбиков с неравномерным ритмом
-struct AgentEqualizer: View {
+/// Таймер работы агента справа в режиме «только нейросеть»: считает секунды от начала работы
+struct AgentElapsedTimer: View {
+    let since: Date
     let tint: Color
 
     var body: some View {
-        TimelineView(.animation) { timeline in
-            AgentBadgeArt.Equalizer(t: timeline.date.timeIntervalSinceReferenceDate, tint: tint)
+        // Раз в 0,5 секунды: цифры тикают раз в секунду, а точка успевает мягко пульсировать
+        TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
+            let seconds = Int(timeline.date.timeIntervalSince(since))
+            let phase = (sin(timeline.date.timeIntervalSinceReferenceDate * 2 * .pi / 1.4) + 1) / 2
+            AgentBadgeArt.Elapsed(seconds: seconds, tint: tint, pulse: phase)
+                .animation(.easeInOut(duration: 0.4), value: phase)
+                .animation(.smooth(duration: 0.3), value: seconds)
         }
     }
 }
