@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/chelka-icon.png" width="128" alt="Chelka icon"></p>
+
 # Chelka for Mac
 
 **Chelka** ("чёлка", Russian for the MacBook notch) turns the notch into a live dashboard for your AI agents, music and system events.
