@@ -41,6 +41,32 @@ extension Notification.Name {
     static let mediaControllerChanged = Notification.Name("mediaControllerChanged")
 }
 
+
+// MARK: - Варианты анимаций (Settings → Animations)
+
+/// Индикатор работы агента (кольцо справа от музыки или слева, если музыки нет)
+enum AgentRunningStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
+    case comet, pulse, orbit
+    var id: String { rawValue }
+    var title: String { switch self { case .comet: return "Comet"; case .pulse: return "Pulse"; case .orbit: return "Orbit" } }
+}
+
+/// Что показывать справа, когда активна только нейросеть (без музыки)
+enum AgentSideStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
+    case timer, equalizer, dots, tool
+    var id: String { rawValue }
+    var title: String {
+        switch self { case .timer: return "Timer"; case .equalizer: return "Equalizer"; case .dots: return "Typing dots"; case .tool: return "Current tool" }
+    }
+}
+
+/// Вид обложки альбома в закрытой «чёлке»
+enum CoverStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
+    case disc, rounded, glow
+    var id: String { rawValue }
+    var title: String { switch self { case .disc: return "Spinning disc"; case .rounded: return "Square cover"; case .glow: return "Glowing cover" } }
+}
+
 // Media controller types for selection in settings
 enum MediaControllerType: String, CaseIterable, Identifiable, Defaults.Serializable {
     case nowPlaying = "Now Playing"
@@ -98,6 +124,9 @@ extension Defaults.Keys {
     static let agentCompletionSound = Key<Bool>("agentCompletionSound", default: true)
     static let agentCompletionExpand = Key<Bool>("agentCompletionExpand", default: true)
     static let showAIUsage = Key<Bool>("showAIUsage", default: true)
+    static let agentRunningStyle = Key<AgentRunningStyle>("agentRunningStyle", default: .comet)
+    static let agentSideStyle = Key<AgentSideStyle>("agentSideStyle", default: .timer)
+    static let coverStyle = Key<CoverStyle>("coverStyle", default: .disc)
     static let playLockSound = Key<Bool>("playLockSound", default: true)
     static let hideFromScreenRecording = Key<Bool>("hideFromScreenRecording", default: false)
     

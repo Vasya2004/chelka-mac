@@ -42,6 +42,9 @@ struct SettingsView: View {
                 NavigationLink(value: "HUD") {
                     Label("HUDs", systemImage: "dial.medium.fill")
                 }
+                NavigationLink(value: "Animations") {
+                    Label("Animations", systemImage: "sparkles")
+                }
                 NavigationLink(value: "Battery") {
                     Label("Battery", systemImage: "battery.100.bolt")
                 }
@@ -81,6 +84,8 @@ struct SettingsView: View {
                     CalendarSettings()
                 case "HUD":
                     HUD()
+                case "Animations":
+                    AnimationSettings()
                 case "Battery":
                     Charge()
                 case "Shelf":

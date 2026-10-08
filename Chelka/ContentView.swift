@@ -486,7 +486,7 @@ struct ContentView: View {
         if let session = agentManager.primary {
             let artSize = max(0, vm.effectiveClosedNotchHeight - 12)
             HStack(spacing: 0) {
-                SpinningAlbumDisc(image: musicManager.albumArt, size: artSize - 3, isPlaying: musicManager.isPlaying)
+                AlbumCover(image: musicManager.albumArt, size: artSize - 3, isPlaying: musicManager.isPlaying)
                 .padding(.leading, 0)
                 .frame(width: agentSideWidth, alignment: .leading)
 
@@ -522,7 +522,7 @@ struct ContentView: View {
         let slot = max(0, vm.effectiveClosedNotchHeight - 12) + 4
         HStack(spacing: 0) {
             // Обложка — вращающийся диск; зона и отступ те же, что в режиме «музыка + нейросеть»
-            SpinningAlbumDisc(
+            AlbumCover(
                 image: musicManager.albumArt,
                 size: max(0, vm.effectiveClosedNotchHeight - 12) - 3,
                 isPlaying: musicManager.isPlaying

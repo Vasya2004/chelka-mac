@@ -6,6 +6,7 @@
 //  и развёрнутое уведомление о завершении
 //
 
+import Defaults
 import SwiftUI
 
 /// Компактный значок агента: комета при работе, импульс на каждое действие, замыкание кольца при завершении
@@ -14,6 +15,7 @@ struct AgentBadge: View {
     var size: CGFloat = 22
 
     @ObservedObject private var manager = AgentActivityManager.shared
+    @Default(.agentRunningStyle) private var runningStyle
     @State private var rippleStart: Date?
     @State private var doneProgress: Double = 0
     @State private var wobble: Double = 0
@@ -32,7 +34,7 @@ struct AgentBadge: View {
             Group {
                 switch status {
                 case .running:
-                    AgentBadgeArt.Running(t: t, size: size, tint: tint, ripple: rippleProgress(timeline.date))
+                    AgentRunningArt(style: runningStyle, t: t, size: size, tint: tint, ripple: rippleProgress(timeline.date))
                 case .waiting:
                     AgentBadgeArt.Waiting(t: t, size: size, tint: tint)
                 case .done:
@@ -131,9 +133,62 @@ struct SpinningAlbumDisc: View {
     }
 }
 
+/// Обложка альбома выбранного вида. Занимает ровно столько же места, что и диск, поэтому размер «чёлки» не меняется.
+struct AlbumCover: View {
+    let image: NSImage
+    /// Диаметр диска (как у SpinningAlbumDisc); у квадратных видов обложка занимает ту же площадку
+    let size: CGFloat
+    let isPlaying: Bool
+    /// nil — брать выбранный в настройках; в превью вид задаётся явно
+    var style: CoverStyle? = nil
+
+    @Default(.coverStyle) private var selectedStyle
+
+    var body: some View {
+        switch style ?? selectedStyle {
+        case .disc:
+            SpinningAlbumDisc(image: image, size: size, isPlaying: isPlaying)
+        case .rounded:
+            SquareCover(image: image, size: size, glow: false, isPlaying: isPlaying)
+        case .glow:
+            SquareCover(image: image, size: size, glow: true, isPlaying: isPlaying)
+        }
+    }
+}
+
+/// Квадратная обложка со скруглением и тонкой светлой рамкой; в «светящемся» виде рамка дышит, пока играет музыка
+struct SquareCover: View {
+    let image: NSImage
+    let size: CGFloat
+    let glow: Bool
+    let isPlaying: Bool
+
+    var body: some View {
+        // Площадка как у диска: размер + рамка (2,5 + 1) с каждой стороны
+        let outer = size + 7
+        let inner = outer - 4.5
+        TimelineView(.animation(paused: !(glow && isPlaying))) { timeline in
+            let breath = glow && isPlaying ? (sin(timeline.date.timeIntervalSinceReferenceDate * 2 * .pi / 2.4) + 1) / 2 : 0.35
+            ZStack {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: inner, height: inner)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                RoundedRectangle(cornerRadius: 6.5, style: .continuous)
+                    .stroke(Color.white.opacity(glow ? 0.18 + 0.55 * breath : 0.22), lineWidth: 1)
+                    .frame(width: outer - 1, height: outer - 1)
+                    .shadow(color: .white.opacity(glow ? 0.55 * breath : 0), radius: 3)
+            }
+            .frame(width: outer, height: outer)
+        }
+    }
+}
+
 /// Строка закрытой «чёлки», когда работает только агент (без музыки)
 struct AgentActivityView: View {
     @ObservedObject private var manager = AgentActivityManager.shared
+    @Default(.agentSideStyle) private var sideStyle
     let notchWidth: CGFloat
     let rowWidth: CGFloat
     static let sideWidth: CGFloat = 50
@@ -154,7 +209,8 @@ struct AgentActivityView: View {
 
                 ZStack {
                     if session.status == .running {
-                        AgentElapsedTimer(since: session.since, tint: tint).transition(.opacity)
+                        AgentSideContent(style: sideStyle, since: session.since, task: session.task, tint: tint)
+                            .transition(.opacity)
                     } else {
                         Text(session.status.label)
                             .font(.system(size: 10.5, weight: .medium))
@@ -183,6 +239,52 @@ struct AgentActivityView: View {
                 .background(Circle().fill(.white.opacity(0.18)))
                 .offset(x: 5, y: -3)
                 .transition(.scale.combined(with: .opacity))
+        }
+    }
+}
+
+/// Рисует индикатор работы выбранного варианта (комета, пульс, орбита)
+struct AgentRunningArt: View {
+    let style: AgentRunningStyle
+    let t: Double
+    let size: CGFloat
+    let tint: Color
+    var ripple: Double? = nil
+
+    var body: some View {
+        switch style {
+        case .comet: AgentBadgeArt.Running(t: t, size: size, tint: tint, ripple: ripple)
+        case .pulse: AgentBadgeArt.RunningPulse(t: t, size: size, tint: tint, ripple: ripple)
+        case .orbit: AgentBadgeArt.RunningOrbit(t: t, size: size, tint: tint, ripple: ripple)
+        }
+    }
+}
+
+/// Содержимое правой стороны в режиме «только нейросеть» (таймер, эквалайзер, точки или название инструмента)
+struct AgentSideContent: View {
+    let style: AgentSideStyle
+    let since: Date
+    let task: String?
+    let tint: Color
+
+    var body: some View {
+        switch style {
+        case .timer:
+            AgentElapsedTimer(since: since, tint: tint)
+        case .equalizer:
+            TimelineView(.animation) { AgentBadgeArt.Equalizer(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
+        case .dots:
+            TimelineView(.animation) { AgentBadgeArt.TypingDots(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
+        case .tool:
+            // Название инструмента, который сейчас использует агент (Bash, Edit, Read…)
+            Text(task?.isEmpty == false ? task! : "Working")
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(tint.opacity(0.9))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: 44)
+                .contentTransition(.interpolate)
+                .animation(.smooth(duration: 0.25), value: task)
         }
     }
 }
