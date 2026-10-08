@@ -67,9 +67,11 @@ private struct UsageProviderView: View {
             .frame(width: 42, alignment: .leading)
 
             if let usage, hasLimits {
+                // Для Claude без прямых данных окна считает само приложение по калибровке — помечаем их «~»
+                let estimate = usage.limitsAreEstimate == true
                 VStack(spacing: 3) {
-                    UsageRow(label: "5h", window: usage.fiveHour, now: now)
-                    UsageRow(label: "Week", window: usage.weekly, now: now)
+                    UsageRow(label: "5h", window: usage.fiveHour, now: now, approximate: estimate)
+                    UsageRow(label: "Week", window: usage.weekly, now: now, approximate: estimate)
                 }
             } else if let usage, let t5 = usage.tokens5h, let t7 = usage.tokens7d {
                 // Настоящих лимитов нет (приложение Claude их не отдаёт). Шкала — расход относительно вашего рекордного окна
@@ -126,7 +128,11 @@ private struct UsageProviderView: View {
             if let w = usage.weekly {
                 lines.append("Week: \(Int(w.remaining(at: now).rounded()))% left\(resetText(w.resetsAt))")
             }
-            lines.append("The tick on the bar is where an even pace would be.")
+            if usage.limitsAreEstimate == true {
+                lines.append("Estimated from your local Claude Code usage, calibrated with claude.ai. Recalibrate in Settings → Advanced → Claude Limits.")
+            } else {
+                lines.append("The tick on the bar is where an even pace would be.")
+            }
         } else if let t5 = usage.tokens5h, let t7 = usage.tokens7d {
             lines.append("Tokens used in Claude Code: \(t5.formatted()) in the last 5h, \(t7.formatted()) in the last 7 days.")
             if let p5 = usage.peak5h, let p7 = usage.peak7d {
@@ -249,5 +255,102 @@ private struct TokenRow: View {
             Spacer(minLength: 0)
         }
         .frame(height: 12)
+    }
+}
+
+
+// MARK: - Калибровка лимитов Claude (настройки)
+
+/// Форма: вводите то, что сейчас показывает claude.ai → Настройки → Использование, и Chelka ведёт оба лимита сама
+struct ClaudeCalibrationForm: View {
+    @ObservedObject private var usage = UsageManager.shared
+
+    @State private var sessionPercent = ""
+    @State private var sessionReset = Date()
+    @State private var weekPercent = ""
+    @State private var weekday = 7
+    @State private var weekTime = Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: Date()) ?? Date()
+    @State private var message: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Claude does not share its limits with other apps. Open claude.ai → Settings → Usage and enter what it shows right now. Chelka will then track both limits on its own and mark them with ~. Recalibrate whenever the numbers drift (for example after using claude.ai chats).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Text("Session used")
+                TextField("64", text: $sessionPercent).frame(width: 52).multilineTextAlignment(.trailing)
+                Text("%")
+                Spacer()
+                Text("resets at")
+                DatePicker("", selection: $sessionReset, displayedComponents: .hourAndMinute).labelsHidden()
+            }
+            HStack(spacing: 8) {
+                Text("Week used")
+                TextField("54", text: $weekPercent).frame(width: 52).multilineTextAlignment(.trailing)
+                Text("%")
+                Spacer()
+                Text("resets on")
+                Picker("", selection: $weekday) {
+                    ForEach(1...7, id: \.self) { Text(Calendar.current.weekdaySymbols[$0 - 1]).tag($0) }
+                }
+                .labelsHidden().frame(width: 130)
+                DatePicker("", selection: $weekTime, displayedComponents: .hourAndMinute).labelsHidden()
+            }
+            HStack(spacing: 10) {
+                Button("Calibrate", action: calibrate).keyboardShortcut(.defaultAction)
+                Button("Reset") { usage.resetClaudeCalibration(); message = "Calibration cleared" }
+                    .disabled(usage.claudeCalibration == nil)
+                Button("Open claude.ai usage") {
+                    if let url = URL(string: "https://claude.ai/settings/usage") { NSWorkspace.shared.open(url) }
+                }
+                Spacer()
+            }
+            if let text = message ?? status {
+                Text(text).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .onAppear(perform: load)
+    }
+
+    private var status: String? {
+        guard let c = usage.claudeCalibration else { return "Not calibrated: Claude shows token usage only." }
+        let when = c.capturedAt.formatted(date: .abbreviated, time: .shortened)
+        if c.sessionCap == nil || c.weekCap == nil { return "Calibrated \(when). Waiting for usage history from Claude Code…" }
+        return "Calibrated \(when)."
+    }
+
+    private func load() {
+        guard let c = usage.claudeCalibration else { return }
+        sessionPercent = String(Int(c.sessionPercent.rounded()))
+        weekPercent = String(Int(c.weekPercent.rounded()))
+        sessionReset = c.sessionResetAt
+        weekday = c.weekResetWeekday
+        weekTime = Calendar.current.date(bySettingHour: c.weekResetHour, minute: c.weekResetMinute, second: 0, of: Date()) ?? Date()
+    }
+
+    private func calibrate() {
+        func percent(_ text: String) -> Double? {
+            guard let v = Double(text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)),
+                  v >= 1, v <= 100 else { return nil }
+            return v
+        }
+        guard let session = percent(sessionPercent), let week = percent(weekPercent) else {
+            message = "Enter both percentages as numbers from 1 to 100."
+            return
+        }
+        // Время сброса сессии — ближайшее такое время (сегодня или завтра)
+        let calendar = Calendar.current
+        let hm = calendar.dateComponents([.hour, .minute], from: sessionReset)
+        var reset = calendar.date(bySettingHour: hm.hour ?? 0, minute: hm.minute ?? 0, second: 0, of: Date()) ?? Date()
+        if reset < Date().addingTimeInterval(-60) { reset = reset.addingTimeInterval(86400) }
+        let wt = calendar.dateComponents([.hour, .minute], from: weekTime)
+        usage.calibrateClaude(ClaudeCalibration(
+            sessionPercent: session, sessionResetAt: reset, weekPercent: week,
+            weekResetWeekday: weekday, weekResetHour: wt.hour ?? 7, weekResetMinute: wt.minute ?? 0,
+            capturedAt: Date()))
+        message = nil
     }
 }

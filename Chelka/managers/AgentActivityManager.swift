@@ -219,7 +219,7 @@ final class AgentActivityManager: ObservableObject {
     nonisolated private static func receive(
         on connection: NWConnection, buffer: Data, completion: @escaping @Sendable (HTTPRequest?) -> Void
     ) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { data, _, isComplete, error in
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 262_144) { data, _, isComplete, error in
             var buffer = buffer
             if let data { buffer.append(data) }
 
@@ -241,7 +241,7 @@ final class AgentActivityManager: ObservableObject {
                 }
             }
 
-            if error != nil || isComplete || buffer.count > 65_536 {
+            if error != nil || isComplete || buffer.count > 524_288 {
                 connection.cancel()
                 completion(nil)
                 return

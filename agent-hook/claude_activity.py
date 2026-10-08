@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 now = time.time()
 H5, D7 = 5 * 3600, 7 * 86400
 LOOKBACK = 35 * 86400  # за какой период ищем «рекордные» окна
+EVENT_DAYS = 9          # история для расчёта окон Claude (сессия 5 часов и неделя) — как её видит приложение
 best = {}  # id сообщения -> (время, токены); одно сообщение пишется в журнал несколько раз при стриминге
 
 for path in glob.glob(os.path.expanduser("~/.claude/projects/**/*.jsonl"), recursive=True):
@@ -53,7 +54,15 @@ peak5 = max((sum(hours.get(h - k, 0) for k in range(5)) for h in hours), default
 peak7 = max((sum(days.get(d - k, 0) for k in range(7)) for d in days), default=0)
 peak5, peak7 = max(peak5, t5), max(peak7, t7)
 
-payload = json.dumps({"provider": "claude", "activity": {"tokens_5h": t5, "tokens_7d": t7, "peak_5h": peak5, "peak_7d": peak7}}).encode()
+# История расхода: токены по 2-минутным интервалам (только непустые). По ней приложение само считает сессию и неделю.
+buckets = {}
+for t, tok in best.values():
+    if now - t <= EVENT_DAYS * 86400:
+        k = int(t // 120) * 120
+        buckets[k] = buckets.get(k, 0) + tok
+events = [[k, v] for k, v in sorted(buckets.items())]
+
+payload = json.dumps({"provider": "claude", "activity": {"tokens_5h": t5, "tokens_7d": t7, "peak_5h": peak5, "peak_7d": peak7, "events": events}}).encode()
 if os.environ.get("BORINGNOTCH_DRY_RUN"):
     print(payload.decode()); sys.exit(0)
 try:

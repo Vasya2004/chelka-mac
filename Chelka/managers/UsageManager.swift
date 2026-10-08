@@ -43,6 +43,26 @@ struct ProviderUsage: Codable, Equatable {
     /// Самое «тяжёлое» ваше окно (5 часов / 7 дней) за последние недели — масштаб для шкалы, когда настоящих лимитов нет
     var peak5h: Int?
     var peak7d: Int?
+    /// true — окна посчитаны приложением по локальному расходу и калибровке, а не получены от Claude
+    var limitsAreEstimate: Bool?
+}
+
+/// Калибровка оценки лимитов Claude: что показывал claude.ai в момент `capturedAt`
+struct ClaudeCalibration: Codable, Equatable {
+    /// Использовано в текущей 5-часовой сессии, % (как на claude.ai)
+    var sessionPercent: Double
+    /// Когда сбросится сессия (на момент калибровки)
+    var sessionResetAt: Date
+    /// Использовано за неделю, %
+    var weekPercent: Double
+    /// День недели сброса (1 — воскресенье … 7 — суббота) и время
+    var weekResetWeekday: Int
+    var weekResetHour: Int
+    var weekResetMinute: Int
+    var capturedAt: Date
+    /// Сколько токенов соответствует 100% (вычисляется по истории расхода)
+    var sessionCap: Double?
+    var weekCap: Double?
 }
 
 /// Поиск логов сессий Codex. Файл лежит в папке дня, когда сессию создали, а продолжаться может днями,
@@ -91,9 +111,14 @@ final class UsageManager: ObservableObject {
 
     @Published private(set) var codex: ProviderUsage?
     @Published private(set) var claude: ProviderUsage?
+    @Published private(set) var claudeCalibration: ClaudeCalibration?
+    /// История расхода токенов Claude Code: (начало интервала, токены), от старых к новым
+    private var claudeEvents: [(t: Double, tokens: Int)] = []
 
     private var timer: Timer?
     private let storeKey = "aiUsageSnapshot.v1"
+    private let calibrationKey = "claudeCalibration.v1"
+    private let eventsKey = "claudeEvents.v1"
 
     private struct Snapshot: Codable {
         var codex: ProviderUsage?
@@ -103,9 +128,14 @@ final class UsageManager: ObservableObject {
     func start() {
         guard timer == nil else { return }
         load()
+        loadClaudeState()
         refreshCodex()
+        recomputeClaude()
         timer = Timer.scheduledTimer(withTimeInterval: 45, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refreshCodex() }
+            Task { @MainActor in
+                self?.refreshCodex()
+                self?.recomputeClaude()   // сессия могла закончиться — окна пересчитываются со временем
+            }
         }
     }
 
@@ -116,6 +146,23 @@ final class UsageManager: ObservableObject {
               let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
         codex = snapshot.codex
         claude = snapshot.claude
+    }
+
+    private func loadClaudeState() {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: calibrationKey),
+           let value = try? JSONDecoder().decode(ClaudeCalibration.self, from: data) { claudeCalibration = value }
+        if let data = defaults.data(forKey: eventsKey),
+           let raw = try? JSONDecoder().decode([[Double]].self, from: data) {
+            claudeEvents = raw.compactMap { $0.count == 2 ? (t: $0[0], tokens: Int($0[1])) : nil }
+        }
+    }
+
+    private func saveClaudeState() {
+        let defaults = UserDefaults.standard
+        if let calibration = claudeCalibration, let data = try? JSONEncoder().encode(calibration) { defaults.set(data, forKey: calibrationKey) }
+        else { defaults.removeObject(forKey: calibrationKey) }
+        if let data = try? JSONEncoder().encode(claudeEvents.map { [$0.t, Double($0.tokens)] }) { defaults.set(data, forKey: eventsKey) }
     }
 
     private func save() {
@@ -141,6 +188,12 @@ final class UsageManager: ObservableObject {
             usage.tokensUpdatedAt = Date()
             claude = usage
             save()
+            if let raw = activity["events"] as? [[NSNumber]] {
+                claudeEvents = raw.compactMap { $0.count == 2 ? (t: $0[0].doubleValue, tokens: $0[1].intValue) : nil }
+                    .sorted { $0.t < $1.t }
+                saveClaudeState()
+                recomputeClaude()
+            }
             return
         }
 
@@ -165,8 +218,95 @@ final class UsageManager: ObservableObject {
         usage.tokensUpdatedAt = claude?.tokensUpdatedAt
         usage.peak5h = claude?.peak5h
         usage.peak7d = claude?.peak7d
+        usage.limitsAreEstimate = false
         claude = usage
         save()
+    }
+
+    // MARK: - Оценка лимитов Claude по локальному расходу и калибровке
+
+    private func tokens(from start: Double, to end: Double) -> Int {
+        claudeEvents.reduce(0) { $0 + ($1.t >= start && $1.t < end ? $1.tokens : 0) }
+    }
+
+    /// Последний момент не позже `date`, когда была заданная неделя/час/минута (начало текущей недели лимита)
+    private func lastWeekAnchor(before date: Date, weekday: Int, hour: Int, minute: Int) -> Date? {
+        var components = DateComponents(); components.weekday = weekday; components.hour = hour; components.minute = minute
+        return Calendar.current.nextDate(after: date.addingTimeInterval(1), matching: components,
+                                         matchingPolicy: .nextTime, direction: .backward)
+    }
+
+    /// Сохраняет калибровку и вычисляет, сколько токенов соответствует 100% сессии и недели
+    func calibrateClaude(_ input: ClaudeCalibration) {
+        var calibration = input
+        let captured = input.capturedAt.timeIntervalSince1970
+        // сессия: от (сброс − 5 часов) до момента калибровки
+        let sessionStart = input.sessionResetAt.timeIntervalSince1970 - 5 * 3600
+        let sessionTokens = tokens(from: sessionStart, to: captured + 1)
+        calibration.sessionCap = input.sessionPercent >= 1 && sessionTokens > 0 ? Double(sessionTokens) / (input.sessionPercent / 100) : nil
+        // неделя: от последнего якоря до момента калибровки
+        if let anchor = lastWeekAnchor(before: input.capturedAt, weekday: input.weekResetWeekday,
+                                       hour: input.weekResetHour, minute: input.weekResetMinute) {
+            let weekTokens = tokens(from: anchor.timeIntervalSince1970, to: captured + 1)
+            calibration.weekCap = input.weekPercent >= 1 && weekTokens > 0 ? Double(weekTokens) / (input.weekPercent / 100) : nil
+        }
+        claudeCalibration = calibration
+        saveClaudeState()
+        recomputeClaude()
+    }
+
+    func resetClaudeCalibration() {
+        claudeCalibration = nil
+        saveClaudeState()
+        if claude?.limitsAreEstimate == true { claude?.fiveHour = nil; claude?.weekly = nil; claude?.limitsAreEstimate = nil; save() }
+    }
+
+    /// Пересчитывает окна Claude (сессию 5 часов и неделю) по истории расхода
+    func recomputeClaude() {
+        guard let calibration = claudeCalibration else { return }
+        // Если от Claude Code приходят настоящие лимиты, оценка им не мешает
+        if let real = claude, real.limitsAreEstimate == false, real.fiveHour != nil,
+           Date().timeIntervalSince(real.updatedAt) < 900 { return }
+        // Масштаб мог не вычислиться (не было истории) — пробуем ещё раз
+        if (calibration.sessionCap == nil || calibration.weekCap == nil), !claudeEvents.isEmpty {
+            calibrateClaude(calibration); return
+        }
+        let now = Date().timeIntervalSince1970
+
+        // Сессия: сначала известная из калибровки, затем каждая следующая начинается с первого сообщения после сброса
+        var start = calibration.sessionResetAt.timeIntervalSince1970 - 5 * 3600
+        var reset = calibration.sessionResetAt.timeIntervalSince1970
+        var sessionActive = true
+        while now >= reset {
+            guard let next = claudeEvents.first(where: { $0.t >= reset }) else { sessionActive = false; break }
+            start = next.t; reset = start + 5 * 3600
+        }
+        var five: UsageWindow?
+        if let cap = calibration.sessionCap, cap > 0 {
+            if sessionActive {
+                let used = min(100, Double(tokens(from: start, to: min(now, reset) + 1)) / cap * 100)
+                five = UsageWindow(usedPercent: used, resetsAt: Date(timeIntervalSince1970: reset), windowMinutes: 300)
+            } else {
+                five = UsageWindow(usedPercent: 0, resetsAt: nil, windowMinutes: 300)   // сессии нет — до первого сообщения
+            }
+        }
+
+        // Неделя
+        var week: UsageWindow?
+        if let cap = calibration.weekCap, cap > 0,
+           let anchor = lastWeekAnchor(before: Date(), weekday: calibration.weekResetWeekday,
+                                       hour: calibration.weekResetHour, minute: calibration.weekResetMinute) {
+            let used = min(100, Double(tokens(from: anchor.timeIntervalSince1970, to: now + 1)) / cap * 100)
+            week = UsageWindow(usedPercent: used, resetsAt: anchor.addingTimeInterval(7 * 86400), windowMinutes: 10080)
+        }
+
+        guard five != nil || week != nil else { return }
+        var usage = claude ?? ProviderUsage(fiveHour: nil, weekly: nil, plan: nil, updatedAt: Date())
+        usage.fiveHour = five
+        usage.weekly = week
+        usage.limitsAreEstimate = true
+        usage.updatedAt = Date()
+        if usage != claude { claude = usage; save() }
     }
 
     // MARK: - Codex (чтение последнего лога сессии)

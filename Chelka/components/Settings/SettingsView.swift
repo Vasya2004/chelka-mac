@@ -1639,6 +1639,12 @@ struct Advanced: View {
             }
 
             Section {
+                ClaudeCalibrationForm()
+            } header: {
+                Text("Claude Limits")
+            }
+
+            Section {
                 Defaults.Toggle(key: .showAgentActivity) {
                     Text("Show AI agent activity")
                 }
