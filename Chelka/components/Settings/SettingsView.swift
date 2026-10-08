@@ -26,46 +26,37 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationSplitView {
+            // Строки с .tag(): в SDK macOS 26 NavigationLink(value:) внутри List(selection:) не записывает выбор,
+            // из-за чего вкладки не переключались
             List(selection: $selectedTab) {
-                NavigationLink(value: "General") {
-                    Label("General", systemImage: "gear")
-                }
-                NavigationLink(value: "Appearance") {
-                    Label("Appearance", systemImage: "eye")
-                }
-                NavigationLink(value: "Media") {
-                    Label("Media", systemImage: "play.laptopcomputer")
-                }
-                NavigationLink(value: "Calendar") {
-                    Label("Calendar", systemImage: "calendar")
-                }
-                NavigationLink(value: "HUD") {
-                    Label("HUDs", systemImage: "dial.medium.fill")
-                }
-                NavigationLink(value: "Animations") {
-                    Label("Animations", systemImage: "sparkles")
-                }
-                NavigationLink(value: "Battery") {
-                    Label("Battery", systemImage: "battery.100.bolt")
-                }
+                Label("General", systemImage: "gear")
+                    .tag("General")
+                Label("Appearance", systemImage: "eye")
+                    .tag("Appearance")
+                Label("Media", systemImage: "play.laptopcomputer")
+                    .tag("Media")
+                Label("Calendar", systemImage: "calendar")
+                    .tag("Calendar")
+                Label("HUDs", systemImage: "dial.medium.fill")
+                    .tag("HUD")
+                Label("Animations", systemImage: "sparkles")
+                    .tag("Animations")
+                Label("Battery", systemImage: "battery.100.bolt")
+                    .tag("Battery")
 //                NavigationLink(value: "Downloads") {
 //                    Label("Downloads", systemImage: "square.and.arrow.down")
 //                }
-                NavigationLink(value: "Shelf") {
-                    Label("Shelf", systemImage: "books.vertical")
-                }
-                NavigationLink(value: "Shortcuts") {
-                    Label("Shortcuts", systemImage: "keyboard")
-                }
+                Label("Shelf", systemImage: "books.vertical")
+                    .tag("Shelf")
+                Label("Shortcuts", systemImage: "keyboard")
+                    .tag("Shortcuts")
                 // NavigationLink(value: "Extensions") {
                 //     Label("Extensions", systemImage: "puzzlepiece.extension")
                 // }
-                NavigationLink(value: "Advanced") {
-                    Label("Advanced", systemImage: "gearshape.2")
-                }
-                NavigationLink(value: "About") {
-                    Label("About", systemImage: "info.circle")
-                }
+                Label("Advanced", systemImage: "gearshape.2")
+                    .tag("Advanced")
+                Label("About", systemImage: "info.circle")
+                    .tag("About")
             }
             .listStyle(SidebarListStyle())
             .tint(.effectiveAccent)
