@@ -63,61 +63,6 @@ extension AgentBadgeArt {
         }
     }
 
-    // MARK: - Индикатор работы: «Радар» — бегущий луч и вспыхивающие отметки
-
-    struct RunningRadar: View {
-        let t: Double
-        let size: CGFloat
-        let tint: Color
-        var ripple: Double? = nil
-
-        var body: some View {
-            let lw = AgentBadgeArt.lineWidth(size)
-            let ring = size * AgentBadgeArt.ringScale
-            let period = 1.6
-            let beam = (t / period).truncatingRemainder(dividingBy: 1) * 2 * .pi   // угол луча (по часовой от 3 часов)
-            Frame(size: size) {
-                Circle().stroke(tint.opacity(0.22), lineWidth: lw).frame(width: ring, height: ring)
-                Circle().stroke(tint.opacity(0.10), lineWidth: lw * 0.6).frame(width: ring * 0.55, height: ring * 0.55)
-                // сектор луча: от прозрачного к яркому у переднего края
-                Circle()
-                    .fill(AngularGradient(gradient: Gradient(stops: [
-                        .init(color: tint.opacity(0), location: 0.0),
-                        .init(color: tint.opacity(0), location: 0.72),
-                        .init(color: tint.opacity(0.55), location: 0.999),
-                        .init(color: tint.opacity(0), location: 1.0),
-                    ]), center: .center))
-                    .frame(width: ring - lw * 2, height: ring - lw * 2)
-                    .rotationEffect(.radians(beam))
-                // отметки: вспыхивают, когда над ними проходит луч, и гаснут
-                Canvas { ctx, sz in
-                    let c = CGPoint(x: sz.width / 2, y: sz.height / 2)
-                    for i in 0..<4 {
-                        let a = noise(i * 7 + 1) * 2 * .pi
-                        let r = (0.25 + 0.5 * noise(i * 7 + 3)) * (ring / 2 - lw)
-                        var since = beam - a
-                        while since < 0 { since += 2 * .pi }
-                        let glow = max(0, 1 - since / 2.2)
-                        let p = CGPoint(x: c.x + r * cos(a), y: c.y + r * sin(a))
-                        let d = lw * (1.0 + 0.6 * glow)
-                        ctx.fill(Path(ellipseIn: CGRect(x: p.x - d, y: p.y - d, width: d * 2, height: d * 2)),
-                                 with: .color(tint.opacity(0.15 + 0.85 * glow)))
-                    }
-                    // яркая линия переднего края луча
-                    var line = Path()
-                    line.move(to: c)
-                    line.addLine(to: CGPoint(x: c.x + (ring / 2 - lw) * cos(beam), y: c.y + (ring / 2 - lw) * sin(beam)))
-                    ctx.stroke(line, with: .color(tint.opacity(0.9)), lineWidth: lw * 0.7)
-                }
-                .frame(width: ring, height: ring)
-                Circle().fill(tint).frame(width: lw * 1.6, height: lw * 1.6)
-                if let p = ripple, p < 1 {
-                    AgentBadgeArt.rippleRing(p, ring: ring, lw: lw, tint: tint, strength: 0.55)
-                }
-            }
-        }
-    }
-
     // MARK: - Индикатор работы: «Галактика» — частицы закручиваются к звёздочке
 
     struct RunningGalaxy: View {
@@ -153,66 +98,6 @@ extension AgentBadgeArt {
                     .frame(width: size * (0.36 + 0.08 * twinkle), height: size * (0.36 + 0.08 * twinkle))
                     .rotationEffect(.degrees(t * 40))
                     .shadow(color: tint.opacity(0.5 + 0.4 * twinkle), radius: size * 0.18)
-                if let p = ripple, p < 1 {
-                    AgentBadgeArt.rippleRing(p, ring: ring, lw: lw, tint: tint, strength: 0.55)
-                }
-            }
-        }
-    }
-
-    // MARK: - Индикатор работы: «Пульс сердца» — бегущая кардиограмма
-
-    struct RunningHeartbeat: View {
-        let t: Double
-        let size: CGFloat
-        let tint: Color
-        var ripple: Double? = nil
-
-        /// Форма одного удара: ровная линия, маленький зубец, резкий пик вверх и провал
-        static func ecg(_ x: Double) -> Double {
-            switch x {
-            case 0.30..<0.36: return 0.18 * sin((x - 0.30) / 0.06 * .pi)
-            case 0.44..<0.47: return -0.25 * (x - 0.44) / 0.03
-            case 0.47..<0.51: return -0.25 + 1.25 * (x - 0.47) / 0.04
-            case 0.51..<0.56: return 1.0 - 1.5 * (x - 0.51) / 0.05
-            case 0.56..<0.60: return -0.5 + 0.5 * (x - 0.56) / 0.04
-            case 0.70..<0.80: return 0.22 * sin((x - 0.70) / 0.10 * .pi)
-            default: return 0
-            }
-        }
-
-        var body: some View {
-            let lw = AgentBadgeArt.lineWidth(size)
-            let ring = size * AgentBadgeArt.ringScale
-            Frame(size: size) {
-                Circle().stroke(tint.opacity(0.18), lineWidth: lw).frame(width: ring, height: ring)
-                Canvas { ctx, sz in
-                    let w = sz.width * 0.78, h = sz.height * 0.30
-                    let x0 = (sz.width - w) / 2, mid = sz.height / 2
-                    let n = 180   // много точек: пик кардиограммы узкий и без ступенек
-                    var line = Path()
-                    var prev: CGPoint?
-                    for i in 0...n {
-                        let u = Double(i) / Double(n)
-                        var phase = (u - t * 0.85).truncatingRemainder(dividingBy: 1)
-                        if phase < 0 { phase += 1 }
-                        let pt = CGPoint(x: x0 + CGFloat(u) * w, y: mid - CGFloat(Self.ecg(phase)) * h)
-                        prev == nil ? line.move(to: pt) : line.addLine(to: pt)
-                        prev = pt
-                    }
-                    // одна непрерывная линия; слева гаснет — как след на мониторе
-                    ctx.stroke(line, with: .linearGradient(Gradient(colors: [tint.opacity(0.05), tint.opacity(0.5), tint]),
-                                                           startPoint: CGPoint(x: x0, y: 0), endPoint: CGPoint(x: x0 + w, y: 0)),
-                               style: StrokeStyle(lineWidth: lw * 0.9, lineCap: .round, lineJoin: .round))
-                    if let prev {
-                        ctx.drawLayer { layer in
-                            layer.addFilter(.shadow(color: tint, radius: lw * 1.5))
-                            layer.fill(Path(ellipseIn: CGRect(x: prev.x - lw, y: prev.y - lw, width: lw * 2, height: lw * 2)), with: .color(tint))
-                        }
-                    }
-                }
-                .frame(width: ring, height: ring)
-                .clipShape(Circle().inset(by: lw))
                 if let p = ripple, p < 1 {
                     AgentBadgeArt.rippleRing(p, ring: ring, lw: lw, tint: tint, strength: 0.55)
                 }
@@ -284,33 +169,6 @@ extension AgentBadgeArt {
             }
             .frame(width: 36, height: 18)
             .mask(LinearGradient(colors: [.clear, .black, .black, .clear], startPoint: .top, endPoint: .bottom))
-        }
-    }
-
-    // MARK: - Правая сторона: «Печатная машинка» — название инструмента печатается по букве
-
-    struct Typewriter: View {
-        let t: Double
-        let text: String
-        let tint: Color
-
-        var body: some View {
-            let word = String(text.prefix(7))
-            let cycle = Double(word.count) * 0.12 + 1.6           // печать + пауза
-            let local = t.truncatingRemainder(dividingBy: cycle)
-            let shown = min(word.count, Int(local / 0.12))
-            let caretOn = (t * 2.2).truncatingRemainder(dividingBy: 1) < 0.55
-            HStack(spacing: 0.5) {
-                Text(String(word.prefix(shown)))
-                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(tint.opacity(0.9))
-                Rectangle()
-                    .fill(tint)
-                    .frame(width: 1.4, height: 11)
-                    .opacity(caretOn ? 1 : 0)
-            }
-            .frame(width: 44, alignment: .trailing)
-            .lineLimit(1)
         }
     }
 

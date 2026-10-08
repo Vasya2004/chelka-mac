@@ -264,9 +264,7 @@ struct AgentRunningArt: View {
         case .pulse: AgentBadgeArt.RunningPulse(t: t, size: size, tint: tint, ripple: ripple)
         case .orbit: AgentBadgeArt.RunningOrbit(t: t, size: size, tint: tint, ripple: ripple)
         case .aurora: AgentBadgeArt.RunningAurora(t: t, size: size, tint: tint, ripple: ripple)
-        case .radar: AgentBadgeArt.RunningRadar(t: t, size: size, tint: tint, ripple: ripple)
         case .galaxy: AgentBadgeArt.RunningGalaxy(t: t, size: size, tint: tint, ripple: ripple)
-        case .heartbeat: AgentBadgeArt.RunningHeartbeat(t: t, size: size, tint: tint, ripple: ripple)
         }
     }
 }
@@ -287,7 +285,7 @@ struct AgentDoneArt: View {
     }
 }
 
-/// Содержимое правой стороны в режиме «только нейросеть» (таймер, эквалайзер, точки или название инструмента)
+/// Содержимое правой стороны в режиме «только нейросеть» (таймер, эквалайзер, точки, волна, дождь или блик)
 struct AgentSideContent: View {
     let style: AgentSideStyle
     let since: Date
@@ -302,25 +300,10 @@ struct AgentSideContent: View {
             TimelineView(.animation) { AgentBadgeArt.Equalizer(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
         case .dots:
             TimelineView(.animation) { AgentBadgeArt.TypingDots(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
-        case .tool:
-            // Название инструмента, который сейчас использует агент (Bash, Edit, Read…)
-            Text(task?.isEmpty == false ? task! : "Working")
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(tint.opacity(0.9))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: 44)
-                .contentTransition(.interpolate)
-                .animation(.smooth(duration: 0.25), value: task)
         case .wave:
             TimelineView(.animation) { AgentBadgeArt.Wave(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
         case .rain:
             TimelineView(.animation) { AgentBadgeArt.Rain(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
-        case .typewriter:
-            TimelineView(.animation) {
-                AgentBadgeArt.Typewriter(t: $0.date.timeIntervalSinceReferenceDate,
-                                         text: task?.isEmpty == false ? task! : "thinking", tint: tint)
-            }
         case .shimmer:
             TimelineView(.animation) { AgentBadgeArt.Shimmer(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
         }

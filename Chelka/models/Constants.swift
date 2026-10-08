@@ -46,24 +46,24 @@ extension Notification.Name {
 
 /// Индикатор работы агента (кольцо справа от музыки или слева, если музыки нет)
 enum AgentRunningStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case comet, pulse, orbit, aurora, radar, galaxy, heartbeat
+    case comet, pulse, orbit, aurora, galaxy
     var id: String { rawValue }
     var title: String {
         switch self {
         case .comet: return "Comet"; case .pulse: return "Pulse"; case .orbit: return "Orbit"
-        case .aurora: return "Aurora"; case .radar: return "Radar"; case .galaxy: return "Galaxy"; case .heartbeat: return "Heartbeat"
+        case .aurora: return "Aurora"; case .galaxy: return "Galaxy"
         }
     }
 }
 
 /// Что показывать справа, когда активна только нейросеть (без музыки)
 enum AgentSideStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case timer, equalizer, dots, tool, wave, rain, typewriter, shimmer
+    case timer, equalizer, dots, wave, rain, shimmer
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .timer: return "Timer"; case .equalizer: return "Equalizer"; case .dots: return "Typing dots"; case .tool: return "Current tool"
-        case .wave: return "Wave"; case .rain: return "Rain"; case .typewriter: return "Typewriter"; case .shimmer: return "Shimmer"
+        case .timer: return "Timer"; case .equalizer: return "Equalizer"; case .dots: return "Typing dots"
+        case .wave: return "Wave"; case .rain: return "Rain"; case .shimmer: return "Shimmer"
         }
     }
 }
