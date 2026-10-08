@@ -80,6 +80,10 @@ struct AgentSession: Identifiable, Equatable {
     var tty: String?
     /// Рабочая папка (для перехода в окно проекта в IDE)
     var cwd: String?
+    /// Процесс самого агента: если он завершился, сессию убираем
+    var agentPID: Int?
+    /// Лог диалога Claude Code: по нему видно, что ход прервали (Esc), даже если хук Stop не пришёл
+    var transcript: String?
 }
 
 /// Событие, которое «разворачивает» чёлку: агент закончил, упал или ждёт вас
@@ -132,6 +136,8 @@ private struct AgentEvent: Decodable {
     var cwd: String?
     var pids: [Int]?
     var tty: String?
+    var agentPid: Int?
+    var transcript: String?
 }
 
 @MainActor
@@ -213,6 +219,88 @@ final class AgentActivityManager: ObservableObject {
         }
         listener.start(queue: .global(qos: .userInitiated))
         self.listener = listener
+        startLivenessCheck()
+    }
+
+    // MARK: - Проверка, что агент ещё работает
+
+    private var livenessTimer: Timer?
+
+    /// Хук «закончил» приходит не всегда: ход прервали по Esc, закрыли окно или терминал.
+    /// Раз в 10 секунд сверяемся с реальностью, чтобы индикатор не крутился впустую.
+    private func startLivenessCheck() {
+        guard livenessTimer == nil else { return }
+        livenessTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.checkLiveness() }
+        }
+    }
+
+    private func checkLiveness() {
+        let candidates = sessions.values.filter { $0.status == .running || $0.status == .waiting }
+        guard !candidates.isEmpty else { return }
+        let now = Date()
+        Task.detached(priority: .utility) {
+            var stale: [String] = []
+            for session in candidates {
+                // Процесс агента завершился — сессии больше нет
+                if let pid = session.agentPID, !Self.processAlive(pid) {
+                    stale.append(session.id)
+                    continue
+                }
+                // Агент молчит дольше 20 секунд — смотрим в лог диалога, не закончен ли ход
+                if session.status == .running, now.timeIntervalSince(session.updatedAt) > 20,
+                   let path = session.transcript, Self.turnFinished(transcript: path) {
+                    stale.append(session.id)
+                }
+            }
+            guard !stale.isEmpty else { return }
+            await MainActor.run {
+                for id in stale {
+                    // Пока проверяли, могло прийти свежее событие — тогда не трогаем
+                    guard let current = self.sessions[id], current.updatedAt <= now,
+                          current.status == .running || current.status == .waiting else { continue }
+                    self.apply(AgentEvent(id: id, agent: nil, status: .end, task: nil, project: nil, cwd: nil, pids: nil, tty: nil))
+                }
+            }
+        }
+    }
+
+    /// Жив ли процесс (getpgid не требует прав на чужой процесс и работает в песочнице)
+    nonisolated private static func processAlive(_ pid: Int) -> Bool {
+        guard pid > 1 else { return true }
+        return getpgid(pid_t(pid)) >= 0 || errno != ESRCH
+    }
+
+    /// Ход Claude Code закончен, если последняя запись диалога — ответ без вызова инструмента
+    /// или отметка о прерывании. Пока выполняется инструмент, последняя запись — его вызов (tool_use).
+    nonisolated private static func turnFinished(transcript path: String) -> Bool {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return false }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        let chunk: UInt64 = 256 * 1024
+        try? handle.seek(toOffset: size > chunk ? size - chunk : 0)
+        guard let data = try? handle.readToEnd() else { return false }
+        let text = String(decoding: data, as: UTF8.self)
+
+        for line in text.split(separator: "\n").reversed() {
+            guard line.contains("\"type\":\"user\"") || line.contains("\"type\":\"assistant\"") else { continue }
+            guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+                  let type = object["type"] as? String, type == "user" || type == "assistant" else { continue }
+            // Служебные записи (вывод команд, напоминания) пропускаем
+            if object["isMeta"] as? Bool == true { continue }
+            let message = object["message"] as? [String: Any]
+            let content = message?["content"]
+            let blocks = content as? [[String: Any]] ?? []
+            let texts = (content as? String).map { [$0] } ?? blocks.compactMap { $0["text"] as? String }
+
+            if type == "user" {
+                // Прервали по Esc; иначе это результат инструмента или новый запрос — агент работает
+                return texts.contains { $0.hasPrefix("[Request interrupted by user") }
+            }
+            // Ответ модели: ход закончен только при stop_reason «end_turn» (при вызове инструмента там «tool_use»)
+            return message?["stop_reason"] as? String == "end_turn"
+        }
+        return false
     }
 
     /// Читает HTTP-запрос до конца тела и отдаёт путь, тело и соединение (ответ отправляет вызывающий)
@@ -386,7 +474,9 @@ final class AgentActivityManager: ObservableObject {
             since: previous?.status == event.status ? (previous?.since ?? Date()) : Date(),
             hostPIDs: event.pids ?? previous?.hostPIDs ?? [],
             tty: event.tty ?? previous?.tty,
-            cwd: event.cwd ?? previous?.cwd
+            cwd: event.cwd ?? previous?.cwd,
+            agentPID: event.agentPid ?? previous?.agentPID,
+            transcript: event.transcript ?? previous?.transcript
         )
         withAnimation(.smooth(duration: 0.3)) { sessions[event.id] = session }
 

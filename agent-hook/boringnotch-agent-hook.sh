@@ -53,6 +53,8 @@ print(json.dumps({
     "cwd": cwd,
     "pids": host["pids"],
     "tty": host["tty"],
+    "agentPid": host["agent_pid"],
+    "transcript": data.get("transcript_path"),
 }, ensure_ascii=False))
 PY
 )"
