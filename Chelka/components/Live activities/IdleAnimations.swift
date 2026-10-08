@@ -57,6 +57,11 @@ struct IdleArt: View {
             case .matrix: IdleMatrix.draw(in: &context, zones: zones, t: t)
             case .rain: IdleRain.draw(in: &context, zones: zones, t: t)
             case .campfire: IdleCampfire.draw(in: &context, zones: zones, t: t)
+            case .invaders: IdleInvaders.draw(in: &context, zones: zones, t: t)
+            case .dino: IdleDino.draw(in: &context, zones: zones, t: t)
+            case .blocks: IdleBlocks.draw(in: &context, zones: zones, t: t)
+            case .puppy: IdlePuppy.draw(in: &context, zones: zones, t: t)
+            case .fireworks: IdleFireworks.draw(in: &context, zones: zones, t: t)
             }
         }
     }
@@ -93,8 +98,9 @@ private struct Sprite {
         for (row, line) in rows.enumerated() {
             for (col, char) in line.enumerated() where char == "#" || char == "o" || char == "-" {
                 let c = flip ? width - 1 - col : col
+                // Чуть внахлёст: при дробном размере пикселя между клетками не видно швов
                 let rect = CGRect(x: originX + CGFloat(c) * pixel, y: originY + CGFloat(row) * pixel,
-                                  width: pixel, height: pixel)
+                                  width: pixel + 0.3, height: pixel + 0.3)
                 let fill = char == "#" ? color : char == "o" ? accent : dark
                 context.fill(Path(rect), with: .color(fill))
             }
@@ -647,6 +653,474 @@ private enum IdleCampfire {
             context.fill(Path(ellipseIn: CGRect(x: zone.midX - 16, y: base - 18, width: 32, height: 26)),
                          with: .radialGradient(Gradient(colors: [Color.orange.opacity(0.18), .clear]),
                                                center: CGPoint(x: zone.midX, y: base - 4), startRadius: 0, endRadius: 16))
+        }
+    }
+}
+
+/// Воспроизводимое «случайное» число 0…1 по целому зерну
+private func idleRandom(_ seed: Int) -> Double {
+    var x = UInt64(bitPattern: Int64(seed)) &* 0x9E3779B97F4A7C15
+    x ^= x >> 31
+    x = x &* 0xBF58476D1CE4E5B9
+    x ^= x >> 29
+    return Double(x % 10_000) / 10_000
+}
+
+// MARK: - Космический бой
+
+/// Кораблик слева по очереди сбивает пришельцев справа; лазер летит сквозь чёлку, сбитый взрывается и возрождается
+private enum IdleInvaders {
+    static let ship = Sprite(rows: [
+        "##.....",
+        "###....",
+        "#######",
+        "###....",
+        "##.....",
+    ])
+    static let alienA = Sprite(rows: [
+        "..#..#..",
+        "...##...",
+        ".######.",
+        "##.##.##",
+        "########",
+        ".#....#.",
+    ])
+    static let alienB = Sprite(rows: [
+        "..#..#..",
+        "#..##..#",
+        "########",
+        "##.##.##",
+        ".######.",
+        "#......#",
+    ])
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let px: CGFloat = 1.5
+        let slots: [CGFloat] = [h * 0.32, h * 0.7]
+        let alienX: [CGFloat] = [zones.right.midX + 3, zones.right.midX - 3]
+        let colors = [Color(red: 0.45, green: 1, blue: 0.5), Color(red: 1, green: 0.42, blue: 0.85)]
+        let period = 2.0
+        let fireAt = 0.45
+        let flight = 0.5
+
+        let shot = Int(floor(t / period))
+        let local = t - Double(shot) * period
+        let target = ((shot % 2) + 2) % 2
+
+        // Кораблик плавно наводится на следующую цель
+        let k = CGFloat(min(1, local / 0.4))
+        let eased = k * k * (3 - 2 * k)
+        let shipY = slots[1 - target] + (slots[target] - slots[1 - target]) * eased
+        let shipX = zones.left.minX + 10
+        ship.draw(in: &context, x: shipX, bottom: shipY + 2.5 * px, pixel: px, color: .white, accent: .white, flip: false)
+        // Огонёк двигателя
+        if Int(t * 12) % 2 == 0 {
+            context.fill(Path(CGRect(x: shipX - 7.5, y: shipY - 0.75, width: 1.5, height: 1.5)), with: .color(.orange))
+        }
+
+        // Лазер
+        if local >= fireAt && local < fireAt + flight {
+            let p = CGFloat((local - fireAt) / flight)
+            let from = shipX + 6
+            let to = alienX[target] - 6
+            context.fill(Path(CGRect(x: from + (to - from) * p, y: slots[target] - 0.6, width: 5, height: 1.2)),
+                         with: .color(Color(red: 1, green: 0.9, blue: 0.3)))
+        }
+
+        // Пришельцы: шевелятся, сбитый разлетается на пиксели и через секунду возрождается
+        let frame = Int(t * 2) % 2 == 0
+        for i in 0..<2 {
+            let lastShot = target == i ? shot : shot - 1
+            let since = t - (Double(lastShot) * period + fireAt + flight)
+            let center = CGPoint(x: alienX[i], y: slots[i] + CGFloat(sin(t * 2 + Double(i) * 2)) * 1.2)
+            if since >= 0 && since < 0.55 {
+                let q = since / 0.55
+                for j in 0..<10 {
+                    let angle = Double(j) / 10 * 2 * .pi + Double(i)
+                    let r = CGFloat(q) * (7 + CGFloat(j % 3) * 2)
+                    context.fill(Path(CGRect(x: center.x + CGFloat(cos(angle)) * r, y: center.y + CGFloat(sin(angle)) * r,
+                                             width: 1.5, height: 1.5)),
+                                 with: .color((j % 2 == 0 ? colors[i] : .white).opacity(1 - q)))
+                }
+                continue
+            }
+            let alpha = since >= 0.55 && since < 1.2 ? (since - 0.55) / 0.65 : 1
+            (frame ? alienA : alienB).draw(in: &context, x: center.x, bottom: center.y + 3 * px, pixel: px,
+                                           color: colors[i].opacity(alpha), accent: .white, flip: false)
+        }
+    }
+}
+
+// MARK: - Динозавр
+
+/// Пиксельный динозавр бежит слева, кактусы едут к нему из-за чёлки — он их перепрыгивает
+private enum IdleDino {
+    static let body = [
+        ".....#####",
+        ".....#.###",
+        ".....#####",
+        ".....###..",
+        "#...#####.",
+        "##.######.",
+        "#########.",
+        ".#######..",
+    ]
+    static let runA = Sprite(rows: body + ["..##..#...", "..#...##.."])
+    static let runB = Sprite(rows: body + ["..#..##...", "..##..#..."])
+    static let jump = Sprite(rows: body + ["..##.##...", "..#...#..."])
+    static let cactus = Sprite(rows: [
+        "..#..",
+        "..#.#",
+        "#.#.#",
+        "#.###",
+        "###..",
+        "..#..",
+        "..#..",
+    ])
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let px: CGFloat = 1.5
+        let ground = h - 4
+        let dinoX = zones.left.minX + 12
+        let speed = 55.0
+        let period = 2.6
+
+        // Земля и бегущие камешки
+        for zone in [zones.left, zones.right] {
+            context.fill(Path(CGRect(x: zone.minX, y: ground, width: zone.width, height: 1)), with: .color(.white.opacity(0.45)))
+        }
+        for i in 0..<12 {
+            let x = w - CGFloat((t * speed + Double(i) * 23).truncatingRemainder(dividingBy: Double(w)))
+            context.fill(Path(CGRect(x: x, y: ground + 2 + CGFloat(i % 2), width: i % 3 == 0 ? 2 : 1, height: 1)),
+                         with: .color(.white.opacity(0.35)))
+        }
+
+        // Кактусы и прыжок перед ближайшим
+        var lift: CGFloat = 0
+        let newest = Int(floor(t / period))
+        for k in (newest - 4)...newest {
+            let x = w + 4 - CGFloat((t - Double(k) * period) * speed)
+            guard x > -10 else { continue }
+            cactus.draw(in: &context, x: x, bottom: ground + 0.5, pixel: px,
+                        color: Color(red: 0.4, green: 0.85, blue: 0.4), accent: .white, flip: false)
+            let d = x - dinoX
+            if d > -12 && d < 22 {
+                lift = max(lift, CGFloat(sin(.pi * Double((22 - d) / 34))) * 11)
+            }
+        }
+        let sprite = lift > 0.5 ? jump : (Int(t * 10) % 2 == 0 ? runA : runB)
+        sprite.draw(in: &context, x: dinoX, bottom: ground + 0.5 - lift, pixel: px, color: Color(white: 0.88), accent: .white, flip: false)
+    }
+}
+
+// MARK: - Тетрис
+
+/// Фигуры падают в «стаканы» по бокам чёлки; играет простой автопилот: собирает линии, они вспыхивают и исчезают
+private enum IdleBlocks {
+    static let baseShapes: [[(Int, Int)]] = [
+        [(0, 0), (1, 0), (2, 0), (3, 0)],  // I
+        [(0, 0), (1, 0), (0, 1), (1, 1)],  // O
+        [(0, 0), (1, 0), (2, 0), (1, 1)],  // T
+        [(1, 0), (2, 0), (0, 1), (1, 1)],  // S
+        [(0, 0), (1, 0), (1, 1), (2, 1)],  // Z
+        [(0, 0), (0, 1), (0, 2), (1, 2)],  // L
+        [(1, 0), (1, 1), (1, 2), (0, 2)],  // J
+    ]
+    /// Все повороты каждой фигуры, клетки сдвинуты к (0, 0)
+    static let rotations: [[[(Int, Int)]]] = baseShapes.map { shape in
+        var result: [[(Int, Int)]] = []
+        var cells = shape
+        for _ in 0..<4 {
+            let minX = cells.map(\.0).min()!
+            let minY = cells.map(\.1).min()!
+            result.append(cells.map { ($0.0 - minX, $0.1 - minY) })
+            cells = cells.map { ($0.1, -$0.0) }
+        }
+        return result
+    }
+    static let palette: [Color] = [
+        Color(red: 0.35, green: 0.9, blue: 1), Color(red: 1, green: 0.85, blue: 0.25), Color(red: 0.75, green: 0.45, blue: 1),
+        Color(red: 0.4, green: 0.95, blue: 0.45), Color(red: 1, green: 0.4, blue: 0.4), Color(red: 1, green: 0.62, blue: 0.2),
+        Color(red: 0.4, green: 0.55, blue: 1),
+    ]
+    static let cols = 10
+    static let pieceTime = 0.8
+
+    /// Состояние партии в одном «стакане»; пересчитывается только при падении новой фигуры
+    final class Game {
+        let rows: Int
+        let seed: Int
+        var start: Double
+        var grid: [Int]
+        var placed = 0
+        var flashRows: [Int] = []
+        var flashTime = -10.0
+
+        init(rows: Int, seed: Int, start: Double) {
+            self.rows = rows
+            self.seed = seed
+            self.start = start
+            grid = Array(repeating: 0, count: rows * IdleBlocks.cols)
+        }
+    }
+    nonisolated(unsafe) static var games: [String: Game] = [:]
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let cell: CGFloat = 3
+        let rows = Int(zones.size.height / cell)
+        for (index, zone) in [zones.left, zones.right].enumerated() {
+            let key = "\(index)-\(rows)"
+            let game = games[key] ?? Game(rows: rows, seed: index * 1000, start: t)
+            games[key] = game
+
+            let elapsed = (t - game.start) / pieceTime
+            // Давно не показывались (или время пошло назад) — начинаем новую партию
+            if elapsed < 0 || Int(elapsed) - game.placed > 40 {
+                game.start = t
+                game.placed = 0
+                game.grid = Array(repeating: 0, count: rows * cols)
+            }
+            let n = Int(max(0, (t - game.start) / pieceTime))
+            while game.placed < n { place(game, at: game.start + Double(game.placed + 1) * pieceTime) }
+
+            let originX = zone.minX + (zone.width - CGFloat(cols) * cell) / 2
+            let originY = zones.size.height - CGFloat(rows) * cell
+            func fill(_ x: Int, _ y: Int, _ color: Color) {
+                context.fill(Path(CGRect(x: originX + CGFloat(x) * cell, y: originY + CGFloat(y) * cell,
+                                         width: cell - 0.5, height: cell - 0.5)), with: .color(color))
+            }
+            // Стакан
+            for y in 0..<rows { for x in 0..<cols where game.grid[y * cols + x] > 0 { fill(x, y, palette[game.grid[y * cols + x] - 1]) } }
+            // Падающая фигура: опускается по клеткам до места посадки
+            if let move = bestMove(game, piece: piece(game, game.placed)) {
+                let fraction = min(1, ((t - game.start) / pieceTime - Double(game.placed)) / 0.85)
+                let y = Int((-2 + Double(move.y + 2) * fraction).rounded(.down))
+                for (cx, cy) in rotations[move.piece][move.rotation] where y + cy >= 0 {
+                    fill(move.x + cx, y + cy, palette[move.piece])
+                }
+            }
+            // Вспышка собранных линий
+            let flash = t - game.flashTime
+            if flash >= 0 && flash < 0.25 {
+                for row in game.flashRows {
+                    context.fill(Path(CGRect(x: originX, y: originY + CGFloat(row) * cell, width: CGFloat(cols) * cell, height: cell - 0.5)),
+                                 with: .color(.white.opacity(1 - flash / 0.25)))
+                }
+            }
+        }
+    }
+
+    private static func piece(_ game: Game, _ number: Int) -> Int {
+        Int(idleRandom(game.seed + number * 7919) * 7) % 7
+    }
+
+    private struct Move { let piece: Int; let rotation: Int; let x: Int; let y: Int }
+
+    /// Лучший ход по простой оценке: ниже, ровнее, без дыр, с собранными линиями
+    private static func bestMove(_ game: Game, piece: Int) -> Move? {
+        var best: (score: Double, move: Move)?
+        for (r, cells) in rotations[piece].enumerated() {
+            let width = cells.map(\.0).max()! + 1
+            for x in 0...(cols - width) {
+                guard fits(game, cells, x, 0) else { continue }
+                var y = 0
+                while fits(game, cells, x, y + 1) { y += 1 }
+                var grid = game.grid
+                for (cx, cy) in cells { grid[(y + cy) * cols + x + cx] = piece + 1 }
+                let score = evaluate(grid, rows: game.rows)
+                if best == nil || score > best!.score { best = (score, Move(piece: piece, rotation: r, x: x, y: y)) }
+            }
+        }
+        return best?.move
+    }
+
+    private static func fits(_ game: Game, _ cells: [(Int, Int)], _ x: Int, _ y: Int) -> Bool {
+        cells.allSatisfy { cx, cy in
+            let gy = y + cy
+            return gy < game.rows && game.grid[gy * cols + x + cx] == 0
+        }
+    }
+
+    private static func evaluate(_ grid: [Int], rows: Int) -> Double {
+        var lines = 0
+        for y in 0..<rows where (0..<cols).allSatisfy({ grid[y * cols + $0] > 0 }) { lines += 1 }
+        var heights = [Int](repeating: 0, count: cols)
+        var holes = 0
+        for x in 0..<cols {
+            var seen = false
+            for y in 0..<rows {
+                if grid[y * cols + x] > 0 {
+                    if !seen { heights[x] = rows - y; seen = true }
+                } else if seen { holes += 1 }
+            }
+        }
+        let bumpiness = zip(heights, heights.dropFirst()).map { abs($0 - $1) }.reduce(0, +)
+        return -0.51 * Double(heights.reduce(0, +)) + 0.76 * Double(lines) - 0.36 * Double(holes) - 0.18 * Double(bumpiness)
+    }
+
+    /// Кладёт очередную фигуру, убирает собранные линии; если стакан переполнен — начинает заново
+    private static func place(_ game: Game, at time: Double) {
+        defer { game.placed += 1 }
+        guard let move = bestMove(game, piece: piece(game, game.placed)) else {
+            game.grid = Array(repeating: 0, count: game.rows * cols)
+            return
+        }
+        for (cx, cy) in rotations[move.piece][move.rotation] { game.grid[(move.y + cy) * cols + move.x + cx] = move.piece + 1 }
+        let full = (0..<game.rows).filter { y in (0..<cols).allSatisfy { game.grid[y * cols + $0] > 0 } }
+        if !full.isEmpty {
+            game.flashRows = full
+            game.flashTime = time
+            var kept = (0..<game.rows).filter { !full.contains($0) }.flatMap { y in game.grid[(y * cols)..<(y * cols + cols)] }
+            kept.insert(contentsOf: Array(repeating: 0, count: full.count * cols), at: 0)
+            game.grid = kept
+        }
+        // Верх стакана занят — новая партия
+        if (0..<(2 * cols)).contains(where: { game.grid[$0] > 0 }) {
+            game.grid = Array(repeating: 0, count: game.rows * cols)
+        }
+    }
+}
+
+// MARK: - Щенок
+
+/// Щенок пинает мячик сквозь чёлку, бежит за ним, приносит обратно в зубах и радостно виляет хвостом
+private enum IdlePuppy {
+    static let walkA = Sprite(rows: [
+        ".........##.",
+        "#.......####",
+        "#......##.#-",
+        ".#######-##.",
+        ".#########..",
+        ".#########..",
+        ".#.#...#.#..",
+    ])
+    static let walkB = Sprite(rows: [
+        ".........##.",
+        "#.......####",
+        "#......##.#-",
+        ".#######-##.",
+        ".#########..",
+        ".#########..",
+        "..#.#.#.#...",
+    ])
+    static let sitA = Sprite(rows: [
+        "......##.",
+        "#....####",
+        "#...##.#-",
+        ".#..#-##.",
+        "..#####..",
+        ".######..",
+        ".######..",
+        ".##.##...",
+    ])
+    static let sitB = Sprite(rows: [
+        "......##.",
+        ".....####",
+        "....##.#-",
+        "....#-##.",
+        "#.#####..",
+        "#######..",
+        ".######..",
+        ".##.##...",
+    ])
+    static let fur = Color(red: 0.96, green: 0.8, blue: 0.55)
+    static let dark = Color(red: 0.45, green: 0.25, blue: 0.1)
+    static let ballColor = Color(red: 1, green: 0.3, blue: 0.3)
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let px: CGFloat = 2
+        let ground = h - 4
+        let leftX = zones.left.midX - 5
+        let rightX = zones.right.midX
+        let cycle = 11.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let step = Int(t * 8) % 2 == 0
+        let wag = Int(t * 6) % 2 == 0
+
+        func ball(_ x: CGFloat, _ y: CGFloat) {
+            context.fill(Path(ellipseIn: CGRect(x: x - 2, y: y - 4, width: 4, height: 4)), with: .color(ballColor))
+        }
+        func lerp(_ a: CGFloat, _ b: CGFloat, _ p: Double) -> CGFloat { a + (b - a) * CGFloat(min(1, max(0, p))) }
+
+        // Мяч
+        switch local {
+        case ..<1.5, 8.6...:
+            ball(leftX + 15, ground)
+        case ..<3.5:
+            let p = (local - 1.5) / 2
+            let bounce = abs(sin(p * .pi * 2.5)) * 11 * (1 - p * 0.7)
+            ball(lerp(leftX + 15, rightX + 6, p), ground - CGFloat(bounce))
+        case ..<5:
+            ball(rightX + 6, ground)
+        default: break
+        }
+
+        // Щенок
+        switch local {
+        case ..<2:
+            (wag ? sitA : sitB).draw(in: &context, x: leftX, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
+        case ..<5:
+            let x = lerp(leftX, rightX - 4, (local - 2) / 3)
+            (step ? walkA : walkB).draw(in: &context, x: x, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
+        case ..<5.6:
+            walkA.draw(in: &context, x: rightX - 4, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
+            ball(rightX + 8, ground - 6)
+        case ..<8.6:
+            // Обратно с мячом в зубах
+            let x = lerp(rightX - 4, leftX, (local - 5.6) / 3)
+            (step ? walkA : walkB).draw(in: &context, x: x, bottom: ground, pixel: px, color: fur, accent: fur, flip: true, dark: dark)
+            ball(x - 12, ground - 6)
+        default:
+            (wag ? sitA : sitB).draw(in: &context, x: leftX, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
+        }
+    }
+}
+
+// MARK: - Фейерверк
+
+/// Ракеты взлетают по бокам чёлки и рассыпаются разноцветными пиксельными искрами
+private enum IdleFireworks {
+    static let palette: [Color] = [
+        Color(red: 1, green: 0.4, blue: 0.7), Color(red: 1, green: 0.85, blue: 0.3), Color(red: 0.4, green: 0.9, blue: 1),
+        Color(red: 0.5, green: 1, blue: 0.5), Color(red: 1, green: 0.55, blue: 0.25), Color(red: 0.8, green: 0.6, blue: 1),
+    ]
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let period = 2.4
+        for (index, zone) in [zones.left, zones.right].enumerated() {
+            for shell in 0..<2 {
+                let shifted = t + Double(index) * 1.1 + Double(shell) * 1.25
+                let number = Int(floor(shifted / period))
+                let local = shifted - Double(number) * period
+                let seed = number * 31 + index * 7 + shell * 3
+                let x = zone.minX + 7 + (zone.width - 14) * CGFloat(idleRandom(seed))
+                let burstY = h * CGFloat(0.28 + 0.18 * idleRandom(seed + 1))
+                let color = palette[Int(idleRandom(seed + 2) * Double(palette.count)) % palette.count]
+
+                if local < 0.45 {
+                    // Взлёт: огонёк со следом
+                    let y = h - (h - burstY) * CGFloat(local / 0.45)
+                    context.fill(Path(CGRect(x: x, y: y, width: 1.5, height: 1.5)), with: .color(.white))
+                    context.fill(Path(CGRect(x: x + 0.25, y: y + 1.5, width: 1, height: 3)), with: .color(color.opacity(0.5)))
+                } else if local < 1.6 {
+                    let q = (local - 0.45) / 1.15
+                    let spread = CGFloat(1 - pow(1 - q, 2)) * 11
+                    for j in 0..<12 {
+                        let angle = Double(j) / 12 * 2 * .pi + idleRandom(seed + 3) * 2
+                        let px = x + CGFloat(cos(angle)) * spread
+                        let py = burstY + CGFloat(sin(angle)) * spread + CGFloat(q * q) * 6
+                        // Искры мерцают перед тем как погаснуть
+                        let flicker = q > 0.6 && (Int(t * 20) + j) % 3 == 0 ? 0.3 : 1
+                        context.fill(Path(CGRect(x: px, y: py, width: 1.5, height: 1.5)),
+                                     with: .color((j % 3 == 0 ? .white : color).opacity((1 - q) * flicker)))
+                    }
+                }
+            }
         }
     }
 }
