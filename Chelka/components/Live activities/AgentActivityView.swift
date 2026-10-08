@@ -200,16 +200,6 @@ struct AgentEqualizer: View {
 
 // MARK: - Развёрнутое уведомление
 
-private struct CheckmarkShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY + rect.height * 0.55))
-        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.38, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        return path
-    }
-}
-
 /// Блок под строкой «чёлки»: чёлка разворачивается и показывает, что агент закончил (или ждёт вас)
 struct AgentBannerView: View {
     let banner: AgentBanner
@@ -235,32 +225,20 @@ struct AgentBannerView: View {
     var body: some View {
         let tint = banner.status.tint
         HStack(spacing: 12) {
+            // Слева «аватар» агента (звёздочка), а не значок статуса: галочка/«!»/рука уже есть в значке справа вверху,
+            // поэтому здесь они не повторяются
             ZStack {
                 // Волна, расходящаяся от значка один раз
                 Circle()
-                    .stroke(tint.opacity(ripple ? 0 : 0.5), lineWidth: 1.4)
-                    .scaleEffect(ripple ? 2.2 : 1)
-                Circle().stroke(tint.opacity(0.4), lineWidth: 1.4)
-
-                switch banner.status {
-                case .done:
-                    CheckmarkShape()
-                        .trim(from: 0, to: drawn ? 1 : 0)
-                        .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                        .frame(width: 11, height: 8)
-                case .error:
-                    Image(systemName: "exclamationmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(tint)
-                        .scaleEffect(drawn ? 1 : 0.3)
-                case .waiting:
-                    Image(systemName: "hand.raised.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(tint)
-                        .scaleEffect(drawn ? 1 : 0.3)
-                default:
-                    EmptyView()
-                }
+                    .stroke(tint.opacity(ripple ? 0 : 0.45), lineWidth: 1.4)
+                    .scaleEffect(ripple ? 1.9 : 1)
+                Circle().fill(tint.opacity(0.16))
+                SparkleShape(pinch: 0.22)
+                    .fill(tint)
+                    .frame(width: 15, height: 15)
+                    .scaleEffect(drawn ? 1 : 0.2)
+                    .rotationEffect(.degrees(drawn ? 0 : -50))
+                    .shadow(color: tint.opacity(0.6), radius: 4)
             }
             .frame(width: 26, height: 26)
 
@@ -286,7 +264,7 @@ struct AgentBannerView: View {
         .onTapGesture { AgentActivityManager.shared.jump(to: banner.sessionID) }
         .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
         .onAppear {
-            withAnimation(.easeOut(duration: 0.45).delay(0.12)) { drawn = true }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.6).delay(0.1)) { drawn = true }
             withAnimation(.easeOut(duration: 0.9).delay(0.1)) { ripple = true }
         }
     }
