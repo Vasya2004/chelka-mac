@@ -171,7 +171,8 @@ enum AgentBadgeArt {
                     .frame(width: size * 0.42, height: size * 0.32)
                     .offset(y: size * 0.01)
             }
-            .shadow(color: tint.opacity(0.45 * progress), radius: size * 0.14)
+            .scaleEffect(0.8)   // значок «готово» чуть компактнее остальных состояний
+            .shadow(color: tint.opacity(0.45 * progress), radius: size * 0.12)
             .frame(width: size * AgentBadgeArt.reach, height: size * AgentBadgeArt.reach)
             .clipShape(Circle())
             .frame(width: size, height: size)
