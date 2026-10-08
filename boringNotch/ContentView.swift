@@ -484,7 +484,7 @@ struct ContentView: View {
             let artSize = max(0, vm.effectiveClosedNotchHeight - 12)
             HStack(spacing: 0) {
                 SpinningAlbumDisc(image: musicManager.albumArt, size: artSize - 3, isPlaying: musicManager.isPlaying)
-                .padding(.leading, 3)
+                .padding(.leading, 2)
                 .frame(width: agentSideWidth, alignment: .leading)
 
                 Spacer(minLength: 0)
@@ -525,6 +525,7 @@ struct ContentView: View {
                 isPlaying: musicManager.isPlaying
             )
             .frame(width: slot, height: slot)
+            .offset(x: -1)   // диск на 1 пункт левее (одинаково в обоих режимах)
 
             Rectangle()
                 .fill(.black)
