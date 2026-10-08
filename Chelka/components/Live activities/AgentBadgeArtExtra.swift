@@ -220,28 +220,41 @@ extension AgentBadgeArt {
         }
     }
 
-    // MARK: - Правая сторона: «Волна» — осциллограф
+    // MARK: - Правая сторона: «Волна» — несколько переплетающихся волн (как у Siri)
 
     struct Wave: View {
         let t: Double
         let tint: Color
 
+        /// Параметры волн: частота, скорость, амплитуда, сдвиг фазы, яркость, толщина
+        private static let layers: [(freq: Double, speed: Double, amp: Double, phase: Double, alpha: Double, width: CGFloat)] = [
+            (8.5, 5.2, 0.95, 0.0, 1.00, 1.5),
+            (11.0, -3.8, 0.70, 1.9, 0.55, 1.2),
+            (6.0, 2.9, 0.55, 3.7, 0.35, 1.0),
+        ]
+
         var body: some View {
             Canvas { ctx, sz in
                 let mid = sz.height / 2
-                var path = Path()
-                let n = 48
-                for i in 0...n {
-                    let u = Double(i) / Double(n)
-                    // огибающая: к краям волна затухает
-                    let env = sin(u * .pi)
-                    let y = mid - CGFloat(env * (0.55 * sin(u * 9 - t * 6) + 0.35 * sin(u * 17 + t * 4.3))) * sz.height * 0.42
-                    let p = CGPoint(x: CGFloat(u) * sz.width, y: y)
-                    i == 0 ? path.move(to: p) : path.addLine(to: p)
+                // общая «громкость»: волны то нарастают, то стихают
+                let swell = 0.75 + 0.25 * sin(t * 2.1)
+                for (k, layer) in Self.layers.enumerated().reversed() {
+                    var path = Path()
+                    let n = 54
+                    for i in 0...n {
+                        let u = Double(i) / Double(n)
+                        let env = pow(sin(u * .pi), 1.4)          // к краям волна затухает
+                        let wobble = 1 + 0.25 * sin(t * (1.3 + Double(k) * 0.7) + Double(k))
+                        let y = mid - CGFloat(env * swell * wobble * layer.amp
+                                              * sin(u * layer.freq - t * layer.speed + layer.phase)) * sz.height * 0.42
+                        let p = CGPoint(x: CGFloat(u) * sz.width, y: y)
+                        i == 0 ? path.move(to: p) : path.addLine(to: p)
+                    }
+                    ctx.stroke(path,
+                               with: .linearGradient(Gradient(colors: [tint.opacity(0.0), tint.opacity(layer.alpha), tint.opacity(0.0)]),
+                                                     startPoint: .zero, endPoint: CGPoint(x: sz.width, y: 0)),
+                               style: StrokeStyle(lineWidth: layer.width, lineCap: .round, lineJoin: .round))
                 }
-                ctx.stroke(path, with: .linearGradient(Gradient(colors: [tint.opacity(0.2), tint, tint.opacity(0.2)]),
-                                                       startPoint: .zero, endPoint: CGPoint(x: sz.width, y: 0)),
-                           style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
             }
             .frame(width: 38, height: 18)
         }
