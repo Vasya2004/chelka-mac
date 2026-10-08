@@ -89,6 +89,22 @@ enum DoneStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
     var duration: Double { self == .check ? 0.55 : 1.0 }
 }
 
+/// Анимация закрытой «чёлки» в простое: нет ни работающих нейросетей, ни медиа
+enum IdleStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
+    case off, cat, eyes, pong, fireflies, face
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .off: return "Off"
+        case .cat: return "Pixel cat"
+        case .eyes: return "Eyes"
+        case .pong: return "Pong"
+        case .fireflies: return "Fireflies"
+        case .face: return "Classic face"
+        }
+    }
+}
+
 // Media controller types for selection in settings
 enum MediaControllerType: String, CaseIterable, Identifiable, Defaults.Serializable {
     case nowPlaying = "Now Playing"
@@ -150,6 +166,7 @@ extension Defaults.Keys {
     static let agentSideStyle = Key<AgentSideStyle>("agentSideStyle", default: .timer)
     static let coverStyle = Key<CoverStyle>("coverStyle", default: .disc)
     static let doneStyle = Key<DoneStyle>("doneStyle", default: .check)
+    static let idleStyle = Key<IdleStyle>("idleStyle", default: .cat)
     static let playLockSound = Key<Bool>("playLockSound", default: true)
     static let hideFromScreenRecording = Key<Bool>("hideFromScreenRecording", default: false)
     

@@ -132,6 +132,7 @@
 		A0C1D2E32F0000010000AD02 /* CodexActivityWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1D2E32F0000010000AD01 /* CodexActivityWatcher.swift */; };
 		A0C1D2E32F0000010000AE02 /* AgentBadgeArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1D2E32F0000010000AE01 /* AgentBadgeArt.swift */; };
 		A0C1D2E32F0000010000AF02 /* AnimationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1D2E32F0000010000AF01 /* AnimationSettings.swift */; };
+		A0C1D2E32F0000010000B102 /* IdleAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1D2E32F0000010000B101 /* IdleAnimations.swift */; };
 		A0C1D2E32F0000010000B002 /* AgentBadgeArtExtra.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C1D2E32F0000010000B001 /* AgentBadgeArtExtra.swift */; };
 		B172AAC02C95DA0B001623F1 /* InlineHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = B172AABF2C95DA0B001623F1 /* InlineHUD.swift */; };
 		B18654392C6F4990000B926A /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = B18654382C6F4990000B926A /* KeyboardShortcuts */; };
@@ -311,6 +312,7 @@
 		A0C1D2E32F0000010000AD01 /* CodexActivityWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexActivityWatcher.swift; sourceTree = "<group>"; };
 		A0C1D2E32F0000010000AE01 /* AgentBadgeArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentBadgeArt.swift; sourceTree = "<group>"; };
 		A0C1D2E32F0000010000AF01 /* AnimationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationSettings.swift; sourceTree = "<group>"; };
+		A0C1D2E32F0000010000B101 /* IdleAnimations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdleAnimations.swift; sourceTree = "<group>"; };
 		A0C1D2E32F0000010000B001 /* AgentBadgeArtExtra.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentBadgeArtExtra.swift; sourceTree = "<group>"; };
 		B172AABF2C95DA0B001623F1 /* InlineHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineHUD.swift; sourceTree = "<group>"; };
 		B186543B2C6F49AE000B926A /* ShortcutConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutConstants.swift; sourceTree = "<group>"; };
@@ -767,6 +769,7 @@
 				14E9FEA92C70BF610062E83F /* DownloadView.swift */,
 				B172AABF2C95DA0B001623F1 /* InlineHUD.swift */,
 				A0C1D2E32F0000010000B001 /* AgentBadgeArtExtra.swift */,
+				A0C1D2E32F0000010000B101 /* IdleAnimations.swift */,
 				A0C1D2E32F0000010000AE01 /* AgentBadgeArt.swift */,
 				A0C1D2E32F0000010000AB03 /* AgentActivityView.swift */,
 				A0C1D2E32F0000010000AA01 /* UnlockAnimationView.swift */,
@@ -996,6 +999,7 @@
 				9AB0C6BD2C73C9CB00F7CD30 /* NotchHomeView.swift in Sources */,
 				B172AAC02C95DA0B001623F1 /* InlineHUD.swift in Sources */,
 				A0C1D2E32F0000010000B002 /* AgentBadgeArtExtra.swift in Sources */,
+				A0C1D2E32F0000010000B102 /* IdleAnimations.swift in Sources */,
 				A0C1D2E32F0000010000AF02 /* AnimationSettings.swift in Sources */,
 				A0C1D2E32F0000010000AE02 /* AgentBadgeArt.swift in Sources */,
 				A0C1D2E32F0000010000AD02 /* CodexActivityWatcher.swift in Sources */,

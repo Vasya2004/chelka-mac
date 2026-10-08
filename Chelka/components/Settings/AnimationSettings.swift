@@ -14,6 +14,7 @@ struct AnimationSettings: View {
     @Default(.agentSideStyle) private var sideStyle
     @Default(.coverStyle) private var coverStyle
     @Default(.doneStyle) private var doneStyle
+    @Default(.idleStyle) private var idleStyle
     @ObservedObject private var music = MusicManager.shared
     /// Момент «начала работы» для превью таймера
     @State private var previewStart = Date().addingTimeInterval(-74)
@@ -110,11 +111,41 @@ struct AnimationSettings: View {
             }
 
             Section {
+                LazyVGrid(columns: columns, spacing: 14) {
+                    ForEach(IdleStyle.allCases) { style in
+                        StyleCard(title: style.title, selected: idleStyle == style, action: { idleStyle = style }) {
+                            if style == .off {
+                                Image(systemName: "moon.zzz")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(.white.opacity(0.35))
+                            } else {
+                                // Мини-«чёлка»: чёрная плашка посередине, анимация вокруг неё
+                                TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+                                    IdleArt(style: style, t: timeline.date.timeIntervalSinceReferenceDate,
+                                            notchWidth: 56, side: IdleAnimationView.sideWidth)
+                                }
+                                .frame(width: 56 + 2 * IdleAnimationView.sideWidth, height: 32)
+                                .background(alignment: .center) {
+                                    Capsule().fill(Color.white.opacity(0.06)).frame(width: 52, height: 6)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("When nothing is active")
+            } footer: {
+                Text("Plays around the closed notch while no AI agent is working and no media is playing. The eyes follow your cursor.")
+            }
+
+            Section {
                 Button("Restore defaults") {
                     runningStyle = .comet
                     sideStyle = .timer
                     coverStyle = .disc
                     doneStyle = .check
+                    idleStyle = .cat
                 }
             }
         }

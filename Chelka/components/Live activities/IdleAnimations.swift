@@ -1,0 +1,361 @@
+//
+//  IdleAnimations.swift
+//  Chelka
+//
+//  Анимации закрытой «чёлки» в простое — когда не работает ни одна нейросеть и не играет медиа.
+//  Всё рисуется одним Canvas по времени t: никаких таймеров и состояния, превью в настройках
+//  показывает ровно то же, что и «чёлка».
+//
+
+import AppKit
+import SwiftUI
+
+/// Строка простоя в закрытой «чёлке»: левая зона, сама чёлка, правая зона
+struct IdleAnimationView: View {
+    /// Ширина зоны по бокам от чёлки
+    static let sideWidth: CGFloat = 36
+
+    let style: IdleStyle
+    let notchWidth: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        // 30 кадров в секунду хватает для пиксельной графики и почти не нагружает процессор
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+            IdleArt(style: style, t: timeline.date.timeIntervalSinceReferenceDate,
+                    notchWidth: notchWidth, side: Self.sideWidth, followMouse: true)
+        }
+        .frame(width: notchWidth + 2 * Self.sideWidth, height: height)
+        .allowsHitTesting(false)
+    }
+}
+
+/// Чистая отрисовка кадра: одна и та же для «чёлки» и превью
+struct IdleArt: View {
+    let style: IdleStyle
+    let t: Double
+    let notchWidth: CGFloat
+    let side: CGFloat
+    /// Глаза следят за курсором (в превью — тоже, относительно верхнего края экрана)
+    var followMouse = true
+
+    var body: some View {
+        Canvas { context, size in
+            let zones = IdleZones(size: size, side: side, notchWidth: notchWidth)
+            // Всё, что попадает под саму чёлку, «уходит за неё»: рисуем только в боковых зонах
+            var clip = Path()
+            clip.addRect(zones.left)
+            clip.addRect(zones.right)
+            context.clip(to: clip)
+
+            switch style {
+            case .off: break
+            case .cat: IdleCat.draw(in: &context, zones: zones, t: t)
+            case .eyes: IdleEyes.draw(in: &context, zones: zones, t: t, mouse: followMouse ? Self.mouseVector(zones: zones) : nil)
+            case .pong: IdlePong.draw(in: &context, zones: zones, t: t)
+            case .fireflies: IdleFireflies.draw(in: &context, zones: zones, t: t)
+            case .face: IdleFace.draw(in: &context, zones: zones, t: t)
+            }
+        }
+    }
+
+    /// Положение курсора относительно центра «чёлки» в точках экрана (y вниз)
+    private static func mouseVector(zones: IdleZones) -> CGPoint? {
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main else { return nil }
+        let mouse = NSEvent.mouseLocation
+        let center = CGPoint(x: screen.frame.midX, y: screen.frame.maxY - zones.size.height / 2)
+        return CGPoint(x: mouse.x - center.x, y: center.y - mouse.y)
+    }
+}
+
+/// Геометрия строки: левая и правая зоны вокруг чёлки
+struct IdleZones {
+    let size: CGSize
+    let left: CGRect
+    let right: CGRect
+
+    init(size: CGSize, side: CGFloat, notchWidth: CGFloat) {
+        self.size = size
+        // Зоны всегда прижаты к краям, середина — под чёлкой
+        let side = min(side, size.width / 2)
+        left = CGRect(x: 0, y: 0, width: side, height: size.height)
+        right = CGRect(x: size.width - side, y: 0, width: side, height: size.height)
+    }
+}
+
+// MARK: - Пиксельные спрайты
+
+/// Спрайт из строк: «#» — пиксель цвета спрайта, «o» — второй цвет (нос), «-» — тёмный (закрытые глаза), остальное — пусто
+private struct Sprite {
+    let rows: [String]
+    var width: Int { rows.map(\.count).max() ?? 0 }
+    var height: Int { rows.count }
+
+    /// Рисует спрайт так, что (x, bottom) — середина нижнего края; flip — смотрит влево
+    func draw(in context: inout GraphicsContext, x: CGFloat, bottom: CGFloat, pixel: CGFloat,
+              color: Color, accent: Color, flip: Bool) {
+        let originX = (x - CGFloat(width) * pixel / 2).rounded()
+        let originY = (bottom - CGFloat(height) * pixel).rounded()
+        for (row, line) in rows.enumerated() {
+            for (col, char) in line.enumerated() where char == "#" || char == "o" || char == "-" {
+                let c = flip ? width - 1 - col : col
+                let rect = CGRect(x: originX + CGFloat(c) * pixel, y: originY + CGFloat(row) * pixel,
+                                  width: pixel, height: pixel)
+                let fill = char == "#" ? color : char == "o" ? accent : Color(red: 0.42, green: 0.2, blue: 0.06)
+                context.fill(Path(rect), with: .color(fill))
+            }
+        }
+    }
+}
+
+// MARK: - Котик
+
+/// Рыжий пиксельный кот живёт своей жизнью: сидит, идёт сквозь чёлку, умывается, засыпает
+private enum IdleCat {
+    static let walkA = Sprite(rows: [
+        ".........#...#",
+        ".........#####",
+        "#........#.#.#",
+        ".#.......##o##",
+        "..##########..",
+        "..##########..",
+        "..##########..",
+        "..#..#...#..#.",
+    ])
+    static let walkB = Sprite(rows: [
+        ".........#...#",
+        ".........#####",
+        "#........#.#.#",
+        ".#.......##o##",
+        "..##########..",
+        "..##########..",
+        "..##########..",
+        "...##.....##..",
+    ])
+    static let sitA = Sprite(rows: [
+        "......#...#",
+        "......#####",
+        "......#.#.#",
+        "......##o##",
+        ".....####..",
+        "....#####..",
+        "#..######..",
+        ".#.######..",
+        "..#######..",
+    ])
+    static let sitB = Sprite(rows: [
+        "......#...#",
+        "......#####",
+        "......#.#.#",
+        "......##o##",
+        ".....####..",
+        "....#####..",
+        "...######..",
+        "#..######..",
+        ".########..",
+    ])
+    /// Умывается: глаза зажмурены, лапа у мордочки
+    static let groom = Sprite(rows: [
+        "......#...#",
+        "......#####",
+        "......#####",
+        "......##o##",
+        ".....####.#",
+        "....#####.#",
+        "#..######..",
+        ".#.######..",
+        "..#######..",
+    ])
+    /// Спит «буханкой»: голова над телом, глаза-щёлочки
+    static let sleep = Sprite(rows: [
+        "........#...#",
+        "........#####",
+        "........#-#-#",
+        "...##########",
+        "..###########",
+        ".############",
+        "#.##########.",
+    ])
+
+    static let fur = Color(red: 1.0, green: 0.64, blue: 0.28)
+    static let nose = Color(red: 1.0, green: 0.45, blue: 0.55)
+
+    /// Цикл 32 секунды: спит слева → идёт направо → сидит и умывается → идёт обратно
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let pixel = max(1.5, (h * 0.62 / 9).rounded(.down))
+        let bottom = h - max(4, (h - 9 * pixel) / 2)
+        let leftX = zones.left.midX
+        let rightX = zones.right.midX
+        let walkTime = 7.0
+        let cycle = 32.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let step = Int(t * 6) % 2 == 0   // шаг лап 6 раз в секунду
+        let tail = Int(t * 2) % 2 == 0   // хвост машет дважды в секунду
+
+        func at(_ p: Double) -> CGFloat { leftX + (rightX - leftX) * CGFloat(p) }
+
+        switch local {
+        case ..<8:
+            // Спит слева, над ним всплывают «z»
+            sleep.draw(in: &context, x: leftX, bottom: bottom, pixel: pixel, color: fur, accent: nose, flip: false)
+            drawZ(in: &context, x: leftX + 7, top: bottom - 8 * pixel, t: local)
+        case ..<9:
+            sitA.draw(in: &context, x: leftX, bottom: bottom, pixel: pixel, color: fur, accent: nose, flip: false)
+        case ..<(9 + walkTime):
+            let p = (local - 9) / walkTime
+            (step ? walkA : walkB).draw(in: &context, x: at(p), bottom: bottom, pixel: pixel, color: fur, accent: nose, flip: false)
+        case ..<(9 + walkTime + 7):
+            // Справа: разворачивается к чёлке, машет хвостом и умывается
+            let sitTime = local - 9 - walkTime
+            let sprite = sitTime > 3 && sitTime < 5.5 ? (Int(t * 3) % 2 == 0 ? groom : sitA) : (tail ? sitA : sitB)
+            sprite.draw(in: &context, x: rightX, bottom: bottom, pixel: pixel, color: fur, accent: nose, flip: true)
+        case ..<(9 + 2 * walkTime + 7):
+            let p = 1 - (local - 9 - walkTime - 7) / walkTime
+            (step ? walkA : walkB).draw(in: &context, x: at(p), bottom: bottom, pixel: pixel, color: fur, accent: nose, flip: true)
+        default:
+            // Дошёл домой: садится, потом снова засыпает
+            sitA.draw(in: &context, x: leftX, bottom: bottom, pixel: pixel, color: fur, accent: nose, flip: false)
+        }
+    }
+
+    /// Три «z», всплывающие по очереди и тающие
+    private static func drawZ(in context: inout GraphicsContext, x: CGFloat, top: CGFloat, t: Double) {
+        for i in 0..<3 {
+            let phase = (t / 2.4 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+            let size = 5 + 3 * phase
+            let text = Text("z").font(.system(size: size, weight: .heavy, design: .monospaced))
+                .foregroundColor(Color.white.opacity(0.85 * sin(.pi * phase)))
+            context.draw(text, at: CGPoint(x: x + CGFloat(phase) * 8, y: top - CGFloat(phase) * 9))
+        }
+    }
+}
+
+// MARK: - Глаза
+
+/// Два глаза по бокам чёлки: следят за курсором и иногда моргают — чёлка становится лицом
+private enum IdleEyes {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double, mouse: CGPoint?) {
+        let h = zones.size.height
+        let eye = min(h * 0.5, zones.left.width * 0.5)
+        // Моргание: каждые ~4 секунды веки быстро смыкаются; иногда двойное
+        let blinkPhase = t.truncatingRemainder(dividingBy: 4.3)
+        let closed = blinkPhase < 0.14 || (Int(t / 4.3) % 3 == 0 && blinkPhase > 0.3 && blinkPhase < 0.42)
+        let openness: CGFloat = closed ? 0.12 : 1
+
+        for zone in [zones.left, zones.right] {
+            let center = CGPoint(x: zone.midX, y: h / 2)
+            let rect = CGRect(x: center.x - eye / 2, y: center.y - eye * openness / 2, width: eye, height: eye * openness)
+            context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.95)))
+            guard !closed else { continue }
+
+            // Зрачок смещается к курсору; без курсора — медленно «оглядывается»
+            var offset: CGPoint
+            if let mouse {
+                // Вектор от этого глаза до курсора (центр зоны относительно середины чёлки)
+                let dx = mouse.x - (center.x - zones.size.width / 2)
+                let dy = mouse.y - (center.y - h / 2)
+                let length = max(1, hypot(dx, dy))
+                let reach = eye * 0.24 * min(1, length / 80)
+                offset = CGPoint(x: dx / length * reach, y: dy / length * reach)
+            } else {
+                offset = CGPoint(x: CGFloat(sin(t * 0.9)) * eye * 0.22, y: CGFloat(sin(t * 0.6)) * eye * 0.1)
+            }
+            let pupil = eye * 0.46
+            context.fill(Path(ellipseIn: CGRect(x: center.x + offset.x - pupil / 2, y: center.y + offset.y - pupil / 2,
+                                                width: pupil, height: pupil)), with: .color(.black))
+            // Блик
+            let glint = pupil * 0.32
+            context.fill(Path(ellipseIn: CGRect(x: center.x + offset.x + pupil * 0.08, y: center.y + offset.y - pupil * 0.38,
+                                                width: glint, height: glint)), with: .color(.white.opacity(0.9)))
+        }
+    }
+}
+
+// MARK: - Пинг-понг
+
+/// Пиксельный понг: мяч летает между ракетками по краям и пролетает «за» чёлкой
+private enum IdlePong {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let px: CGFloat = 2
+        let paddleH = px * 5
+        let leftPaddleX = zones.left.minX + 6
+        let rightPaddleX = zones.right.maxX - 6 - px
+        let minX = leftPaddleX + px
+        let maxX = rightPaddleX - px * 2
+        let top = h * 0.18
+        let bottom = h * 0.82 - px * 2
+
+        // Мяч: «треугольная волна» по x и по y с разными периодами — траектория не повторяется подолгу
+        func triangle(_ value: Double) -> CGFloat { CGFloat(1 - abs(value.truncatingRemainder(dividingBy: 2) - 1)) }
+        func ball(at time: Double) -> CGPoint {
+            CGPoint(x: minX + (maxX - minX) * triangle(time / 1.6), y: top + (bottom - top) * triangle(time / 0.71))
+        }
+        let position = ball(at: t)
+
+        // Шлейф
+        for i in 1...3 {
+            let p = ball(at: t - Double(i) * 0.035)
+            context.fill(Path(CGRect(x: p.x, y: p.y, width: px * 2, height: px * 2)),
+                         with: .color(.white.opacity(0.28 - Double(i) * 0.07)))
+        }
+        context.fill(Path(CGRect(x: position.x, y: position.y, width: px * 2, height: px * 2)), with: .color(.white))
+
+        // Ракетки следят за мячом с небольшим отставанием, у каждой — своё
+        for (x, lag) in [(leftPaddleX, 0.12), (rightPaddleX, 0.09)] {
+            let target = ball(at: t - lag).y + px - paddleH / 2
+            let y = min(max(target, h * 0.12), h * 0.88 - paddleH)
+            context.fill(Path(CGRect(x: x, y: (y / px).rounded() * px, width: px, height: paddleH)),
+                         with: .color(.white.opacity(0.9)))
+        }
+    }
+}
+
+// MARK: - Светлячки
+
+/// Тёплые огоньки медленно парят по обе стороны чёлки, разгораются и гаснут
+private enum IdleFireflies {
+    static let glow = Color(red: 0.86, green: 1.0, blue: 0.45)
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        for (zoneIndex, zone) in [zones.left, zones.right].enumerated() {
+            for i in 0..<5 {
+                // Псевдослучайные, но постоянные параметры каждого огонька
+                let seed = Double(zoneIndex * 7 + i) * 1.618
+                let x = zone.midX + CGFloat(sin(t * (0.31 + 0.07 * Double(i)) + seed * 3)) * zone.width * 0.38
+                let y = h / 2 + CGFloat(sin(t * (0.43 + 0.05 * Double(i)) + seed * 5)) * h * 0.32
+                let pulse = pow((sin(t * (0.9 + 0.2 * Double(i)) + seed * 2) + 1) / 2, 2)
+                guard pulse > 0.02 else { continue }
+                let halo = 4.5 * CGFloat(0.6 + 0.4 * pulse)
+                context.fill(Path(ellipseIn: CGRect(x: x - halo, y: y - halo, width: halo * 2, height: halo * 2)),
+                             with: .radialGradient(Gradient(colors: [glow.opacity(0.55 * pulse), glow.opacity(0)]),
+                                                   center: CGPoint(x: x, y: y), startRadius: 0, endRadius: halo))
+                let core: CGFloat = 1.3
+                context.fill(Path(ellipseIn: CGRect(x: x - core, y: y - core, width: core * 2, height: core * 2)),
+                             with: .color(Color.white.opacity(0.9 * pulse)))
+            }
+        }
+    }
+}
+
+// MARK: - Классическое лицо
+
+/// Мордочка из оригинального boring.notch: глаза-точки, нос и улыбка справа от чёлки
+private enum IdleFace {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let c = CGPoint(x: zones.right.midX, y: zones.size.height / 2)
+        let blink = t.truncatingRemainder(dividingBy: 3) < 0.12
+        let eyeH: CGFloat = blink ? 1 : 4
+        for dx in [-4.0, 4.0] {
+            context.fill(Path(roundedRect: CGRect(x: c.x + dx - 2, y: c.y - 7 - eyeH / 2, width: 4, height: eyeH), cornerRadius: 2),
+                         with: .color(.white))
+        }
+        context.fill(Path(roundedRect: CGRect(x: c.x - 1.5, y: c.y - 2, width: 3, height: 4), cornerRadius: 1.5), with: .color(.white))
+        var mouth = Path()
+        mouth.move(to: CGPoint(x: c.x - 7, y: c.y + 4))
+        mouth.addQuadCurve(to: CGPoint(x: c.x + 7, y: c.y + 4), control: CGPoint(x: c.x, y: c.y + 10))
+        context.stroke(mouth, with: .color(.white), lineWidth: 2)
+    }
+}

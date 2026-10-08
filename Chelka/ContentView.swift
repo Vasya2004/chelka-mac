@@ -36,7 +36,6 @@ struct ContentView: View {
 
     @Default(.useMusicVisualizer) var useMusicVisualizer
 
-    @Default(.showNotHumanFace) var showNotHumanFace
 
     // Shared interactive spring for movement/resizing to avoid conflicting animations
     private let animationSpring = Animation.interactiveSpring(response: 0.38, dampingFraction: 0.8, blendDuration: 0)
@@ -97,6 +96,13 @@ struct ContentView: View {
 /// Ширина боковой зоны при музыке: одна и та же в режимах «только музыка» и «музыка + нейросеть»,
     /// поэтому «чёлка» не меняет ширину, когда появляется агент
     private let musicSideWidth: CGFloat = 29
+    @Default(.idleStyle) private var idleStyle
+
+    /// Анимация простоя: «чёлка» закрыта, агентов нет (проверяются раньше по цепочке), медиа не играет
+    private var idleAnimationVisible: Bool {
+        idleStyle != .off && !coordinator.expandingView.show && vm.notchState == .closed
+            && !musicManager.isPlaying && musicManager.isPlayerIdle && !vm.hideOnClosed
+    }
     private var agentSideWidth: CGFloat { musicLiveActivityShown ? musicSideWidth : AgentActivityView.sideWidth }
 
     private var agentRowWidth: CGFloat {
@@ -121,11 +127,8 @@ struct ContentView: View {
             && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed
         {
             chinWidth += (2 * max(0, vm.effectiveClosedNotchHeight - 12) + 20)
-        } else if !coordinator.expandingView.show && vm.notchState == .closed
-            && (!musicManager.isPlaying && musicManager.isPlayerIdle) && Defaults[.showNotHumanFace]
-            && !vm.hideOnClosed
-        {
-            chinWidth += (2 * max(0, vm.effectiveClosedNotchHeight - 12) + 20)
+        } else if idleAnimationVisible {
+            chinWidth += 2 * IdleAnimationView.sideWidth
         }
 
         return chinWidth
@@ -357,8 +360,11 @@ struct ContentView: View {
                       } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music) && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed {
                           MusicLiveActivity()
                               .frame(alignment: .center)
-                      } else if !coordinator.expandingView.show && vm.notchState == .closed && (!musicManager.isPlaying && musicManager.isPlayerIdle) && Defaults[.showNotHumanFace] && !vm.hideOnClosed  {
-                          BoringFaceAnimation()
+                      } else if idleAnimationVisible {
+                          // Простой: ни нейросетей, ни медиа — своя анимация вокруг чёлки
+                          IdleAnimationView(style: idleStyle, notchWidth: vm.closedNotchSize.width,
+                                            height: vm.effectiveClosedNotchHeight)
+                              .transition(.opacity)
                        } else if vm.notchState == .open {
                            BoringHeader()
                                .frame(height: max(24, vm.effectiveClosedNotchHeight))
@@ -442,27 +448,6 @@ struct ContentView: View {
             }
         }
         .onDrop(of: [.fileURL, .url, .utf8PlainText, .plainText, .data], delegate: GeneralDropTargetDelegate(isTargeted: $vm.generalDropTargeting))
-    }
-
-    @ViewBuilder
-    func BoringFaceAnimation() -> some View {
-        HStack {
-            HStack {
-                Rectangle()
-                    .fill(.clear)
-                    .frame(
-                        width: max(0, vm.effectiveClosedNotchHeight - 12),
-                        height: max(0, vm.effectiveClosedNotchHeight - 12)
-                    )
-                Rectangle()
-                    .fill(.black)
-                    .frame(width: vm.closedNotchSize.width - 20)
-                MinimalFaceFeatures()
-            }
-        }.frame(
-            height: vm.effectiveClosedNotchHeight,
-            alignment: .center
-        )
     }
 
     /// Строка агента в закрытой «чёлке»: отдельно или вместе с музыкой
