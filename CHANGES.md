@@ -7,6 +7,8 @@ Chelka is a modified version of [Boring Notch](https://github.com/TheBoredTeam/b
 - Sparkle auto-update disabled (feed URL and key removed, updater not started, update UI hidden).
 - Upstream CI/release workflows and funding files removed from `.github`.
 - Welcome screen credits the original project.
+- Project, source folder and helper renamed (`Chelka.xcodeproj`, `Chelka/`, `ChelkaXPCHelper/`) via `git mv`, history kept.
+- Upstream-only files removed: update feed (`updater/appcast.xml`), `CONTRIBUTING.md`, `crowdin.yml`, the upstream team logo asset; `SECURITY.md` rewritten for this repository. License and credits are kept.
 - New app icon: a friendly face whose monobrow is the notch, with a vinyl record and an agent sparkle as eyes. Drawn from scratch.
 
 ## AI agents

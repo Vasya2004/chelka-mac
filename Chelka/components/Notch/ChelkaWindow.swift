@@ -1,5 +1,5 @@
 //
-//  BoringNotchWindow.swift
+//  ChelkaWindow.swift
 //  boringNotch
 //
 //  Created by Harsh Vardhan  Goswami  on 06/08/24.
@@ -7,7 +7,7 @@
 
 import Cocoa
 
-class BoringNotchWindow: NSPanel {
+class ChelkaWindow: NSPanel {
     override init(
         contentRect: NSRect,
         styleMask: NSWindow.StyleMask,

@@ -36,7 +36,7 @@ Requires Xcode 15+ (developed with Xcode 26).
 ```bash
 git clone https://github.com/Vasya2004/chelka-mac
 cd chelka-mac
-xcodebuild -project boringNotch.xcodeproj -scheme boringNotch -configuration Release \
+xcodebuild -project Chelka.xcodeproj -scheme Chelka -configuration Release \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_ALLOWED=YES CODE_SIGN_STYLE=Manual \
   ENABLE_DEBUG_DYLIB=NO ENABLE_HARDENED_RUNTIME=NO build
 ```

@@ -306,7 +306,7 @@ final class AgentActivityManager: ObservableObject {
         if let connection = permissionConnections[id] {
             let body = allow
                 ? "{\"behavior\":\"allow\"}"
-                : "{\"behavior\":\"deny\",\"message\":\"Denied from boringNotch\"}"
+                : "{\"behavior\":\"deny\",\"message\":\"Denied from Chelka\"}"
             Self.respond(connection, status: "200 OK", body: body)
         }
         finishPermission(id)
