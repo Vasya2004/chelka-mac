@@ -94,7 +94,10 @@ struct ContentView: View {
     }
 
     /// Ширина боковой части строки: при совмещении с музыкой она чуть шире
-    private var agentSideWidth: CGFloat { musicLiveActivityShown ? 29 : AgentActivityView.sideWidth }
+/// Ширина боковой зоны при музыке: одна и та же в режимах «только музыка» и «музыка + нейросеть»,
+    /// поэтому «чёлка» не меняет ширину, когда появляется агент
+    private let musicSideWidth: CGFloat = 29
+    private var agentSideWidth: CGFloat { musicLiveActivityShown ? musicSideWidth : AgentActivityView.sideWidth }
 
     private var agentRowWidth: CGFloat {
         let base = vm.closedNotchSize.width + 2 * agentSideWidth
@@ -517,15 +520,15 @@ struct ContentView: View {
     func MusicLiveActivity() -> some View {
         // Одинаковая ширина боковых зон, чтобы вырез «чёлки» оставался по центру
         let slot = max(0, vm.effectiveClosedNotchHeight - 12) + 4
-        HStack {
-            // Обложка — вращающийся диск (как и в режиме «музыка + нейросеть»)
+        HStack(spacing: 0) {
+            // Обложка — вращающийся диск; зона и отступ те же, что в режиме «музыка + нейросеть»
             SpinningAlbumDisc(
                 image: musicManager.albumArt,
                 size: max(0, vm.effectiveClosedNotchHeight - 12) - 3,
                 isPlaying: musicManager.isPlaying
             )
-            .frame(width: slot, height: slot)
-            .offset(x: -1)   // диск на 1 пункт левее (одинаково в обоих режимах)
+            .padding(.leading, 2)
+            .frame(width: musicSideWidth, alignment: .leading)
 
             Rectangle()
                 .fill(.black)
@@ -571,7 +574,6 @@ struct ContentView: View {
                         && Defaults[.sneakPeekStyles] == .inline)
                         ? 380
                         : vm.closedNotchSize.width
-                            + -cornerRadiusInsets.closed.top
                 )
 
             HStack {
@@ -605,6 +607,7 @@ struct ContentView: View {
                 ),
                 alignment: .center
             )
+            .frame(width: musicSideWidth + gestureProgress / 2, alignment: .trailing)
         }
         .frame(
             height: vm.effectiveClosedNotchHeight,
