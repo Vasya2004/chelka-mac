@@ -487,7 +487,7 @@ struct ContentView: View {
             let artSize = max(0, vm.effectiveClosedNotchHeight - 12)
             HStack(spacing: 0) {
                 SpinningAlbumDisc(image: musicManager.albumArt, size: artSize - 3, isPlaying: musicManager.isPlaying)
-                .padding(.leading, 2)
+                .padding(.leading, 0)
                 .frame(width: agentSideWidth, alignment: .leading)
 
                 Spacer(minLength: 0)
@@ -495,7 +495,7 @@ struct ContentView: View {
                 Spacer(minLength: 0)
 
                 // Справа только значок нейросети (без эквалайзера): анимация музыки — вращающийся диск слева
-                AgentBadge(status: session.status, size: 22)
+                AgentBadge(status: session.status, size: 20)
                     .overlay(alignment: .topTrailing) {
                         if agentManager.count > 1 {
                             Text("\(agentManager.count)")
@@ -507,7 +507,7 @@ struct ContentView: View {
                                 .offset(x: 5, y: -4)
                         }
                     }
-                .padding(.trailing, 4)   // значок на 1 пункт ближе к правому краю
+                .padding(.trailing, 3)   // значок ближе к правому краю
                 .frame(width: agentSideWidth, alignment: .trailing)
             }
             .frame(width: agentRowWidth)
@@ -527,7 +527,7 @@ struct ContentView: View {
                 size: max(0, vm.effectiveClosedNotchHeight - 12) - 3,
                 isPlaying: musicManager.isPlaying
             )
-            .padding(.leading, 2)
+            .padding(.leading, 0)
             .frame(width: musicSideWidth, alignment: .leading)
 
             Rectangle()
