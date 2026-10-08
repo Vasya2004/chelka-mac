@@ -62,6 +62,8 @@ struct IdleArt: View {
             case .blocks: IdleBlocks.draw(in: &context, zones: zones, t: t)
             case .puppy: IdlePuppy.draw(in: &context, zones: zones, t: t)
             case .fireworks: IdleFireworks.draw(in: &context, zones: zones, t: t)
+            case .portal: IdlePortal.draw(in: &context, zones: zones, t: t)
+            case .spider: IdleSpider.draw(in: &context, zones: zones, t: t)
             }
         }
     }
@@ -1121,6 +1123,239 @@ private enum IdleFireworks {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Портал
+
+/// Человечек открывает портал у левого края чёлки, выходит из второго — у правого, осматривается и возвращается обратно
+private enum IdlePortal {
+    static let idle = Sprite(rows: [
+        ".###.",
+        ".###.",
+        "..#..",
+        ".ooo.",
+        "o.o.o",
+        "..o..",
+        ".#.#.",
+        ".#.#.",
+        ".#.#.",
+    ])
+    static let walkA = Sprite(rows: [
+        ".###.",
+        ".###.",
+        "..#..",
+        ".ooo.",
+        "o.o..",
+        "..o.o",
+        ".#.#.",
+        "#...#",
+        "#...#",
+    ])
+    static let walkB = Sprite(rows: [
+        ".###.",
+        ".###.",
+        "..#..",
+        ".ooo.",
+        "..o.o",
+        "o.o..",
+        "..#..",
+        ".#.#.",
+        ".#.#.",
+    ])
+    static let skin = Color(white: 0.95)
+    static let shirt = Color(red: 0.35, green: 0.85, blue: 0.6)
+    static let blue = Color(red: 0.3, green: 0.62, blue: 1)
+    static let orange = Color(red: 1, green: 0.6, blue: 0.2)
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let px: CGFloat = 2
+        let ground = h - 3
+        let portalLeft = zones.left.maxX - 5
+        let portalRight = zones.right.minX + 5
+        let homeLeft = zones.left.minX + 10
+        let homeRight = zones.right.maxX - 10
+        let cycle = 16.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let back = local >= cycle / 2
+        let phase = back ? local - cycle / 2 : local
+        let step = Int(t * 7) % 2 == 0
+
+        // Порталы: открываются с «пружинкой», держатся, пока идёт переход, и схлопываются
+        func openness(_ start: Double, _ end: Double) -> CGFloat {
+            if phase < start || phase > end + 0.4 { return 0 }
+            if phase < start + 0.45 {
+                let p = (phase - start) / 0.45 - 1
+                return CGFloat(1 + 2.7 * p * p * p + 1.7 * p * p)
+            }
+            if phase > end { return CGFloat(1 - (phase - end) / 0.4) }
+            return 1
+        }
+        let entryOpen = openness(1.0, 3.9)
+        let exitOpen = openness(1.3, 3.9)
+
+        // Путь «развёрнут»: пройдя входной портал, человечек продолжает идти из выходного
+        let from = back ? homeRight : homeLeft
+        let entry = back ? portalRight : portalLeft
+        let exit = back ? portalLeft : portalRight
+        let to = back ? homeLeft : homeRight
+        let direction: CGFloat = back ? -1 : 1
+        let total = abs(entry - from) + abs(to - exit)
+        let walked = CGFloat(min(1, max(0, (phase - 1.5) / 2.4))) * total
+        let walking = phase > 1.5 && phase < 3.9
+
+        func person(at x: CGFloat, clipLeftOf limit: CGFloat?, clipRightOf: CGFloat?, flip: Bool, sprite: Sprite) {
+            var layer = context
+            if let limit { layer.clip(to: Path(CGRect(x: 0, y: 0, width: limit, height: h))) }
+            if let clipRightOf { layer.clip(to: Path(CGRect(x: clipRightOf, y: 0, width: zones.size.width, height: h))) }
+            sprite.draw(in: &layer, x: x, bottom: ground, pixel: px, color: skin, accent: shirt, flip: flip)
+        }
+
+        let sprite = walking ? (step ? walkA : walkB) : idle
+        if walked < abs(entry - from) + 6 {
+            // Ещё по эту сторону (или наполовину в портале)
+            let x = from + direction * walked
+            person(at: x, clipLeftOf: back ? nil : entry, clipRightOf: back ? entry : nil, flip: back, sprite: sprite)
+        }
+        if walked > abs(entry - from) - 6 {
+            let x = exit + direction * (walked - abs(entry - from))
+            person(at: x, clipLeftOf: back ? exit : nil, clipRightOf: back ? nil : exit, flip: back, sprite: sprite)
+        }
+        drawPortal(in: &context, x: portalLeft, ground: ground, height: h - 6, open: back ? exitOpen : entryOpen, color: blue, t: t)
+        drawPortal(in: &context, x: portalRight, ground: ground, height: h - 6, open: back ? entryOpen : exitOpen, color: orange, t: t)
+    }
+
+    private static func drawPortal(in context: inout GraphicsContext, x: CGFloat, ground: CGFloat, height: CGFloat,
+                                   open: CGFloat, color: Color, t: Double) {
+        guard open > 0.01 else { return }
+        let ph = height * open
+        let pw = 7 * min(1, open * 1.4)
+        let rect = CGRect(x: x - pw / 2, y: ground - ph, width: pw, height: ph)
+        context.fill(Path(ellipseIn: rect.insetBy(dx: -3, dy: -2)), with: .color(color.opacity(0.22)))
+        context.fill(Path(ellipseIn: rect), with: .color(color.opacity(0.25)))
+        context.stroke(Path(ellipseIn: rect), with: .color(color), lineWidth: 1.6)
+        // Искорки бегут по кольцу
+        for k in 0..<3 {
+            let angle = t * 4 + Double(k) * 2.1
+            let point = CGPoint(x: rect.midX + pw / 2 * CGFloat(cos(angle)), y: rect.midY + ph / 2 * CGFloat(sin(angle)))
+            context.fill(Path(CGRect(x: point.x - 0.6, y: point.y - 0.6, width: 1.2, height: 1.2)), with: .color(.white.opacity(0.9)))
+        }
+    }
+}
+
+// MARK: - Человек-паук
+
+/// Висит вниз головой на паутине слева, выстреливает паутину и пролетает под чёлкой, справа приземляется и уползает вверх
+private enum IdleSpider {
+    /// «#» — красный костюм, «-» — синий, «o» — белые глаза маски
+    static let hero = Sprite(rows: [
+        "..###..",
+        ".#o#o#.",
+        "..###..",
+        ".#####.",
+        "-.###.-",
+        "-.---.-",
+        "..---..",
+        "..#.#..",
+        "..#.#..",
+        ".##.##.",
+    ])
+    /// Ползёт вверх: руки и ноги попеременно
+    static let climbA = Sprite(rows: [
+        "#.###..",
+        "##o#o#.",
+        "..###..",
+        ".#####.",
+        "..###.-",
+        "..---.-",
+        "..---..",
+        "..#.#..",
+        "..#..#.",
+        ".##..##",
+    ])
+    static let climbB = Sprite(rows: [
+        "..###.#",
+        ".#o#o##",
+        "..###..",
+        ".#####.",
+        "-.###..",
+        "-.---..",
+        "..---..",
+        "..#.#..",
+        ".#..#..",
+        "##..##.",
+    ])
+    static let red = Color(red: 0.95, green: 0.2, blue: 0.22)
+    static let blue = Color(red: 0.25, green: 0.4, blue: 1)
+    static let web = Color.white.opacity(0.75)
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let px: CGFloat = 1.6
+        let heroH = CGFloat(hero.height) * px
+        let cycle = 10.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let hangX = zones.left.midX
+        let hangY = h - heroH / 2 - 2          // центр героя, когда висит внизу
+        let landX = zones.right.midX + 4
+        let anchor = CGPoint(x: w / 2, y: -h * 0.6)   // паутина крепится за чёлкой, выше неё
+
+        /// Рисует героя с поворотом вокруг его центра
+        func drawHero(_ sprite: Sprite, at center: CGPoint, rotation: Double, flip: Bool = false) {
+            var layer = context
+            layer.translateBy(x: center.x, y: center.y)
+            layer.rotate(by: .radians(rotation))
+            sprite.draw(in: &layer, x: 0, bottom: heroH / 2, pixel: px, color: red, accent: .white, flip: flip, dark: blue)
+        }
+        func line(_ a: CGPoint, _ b: CGPoint) {
+            var path = Path()
+            path.move(to: a)
+            path.addLine(to: b)
+            context.stroke(path, with: .color(web), lineWidth: 0.8)
+        }
+
+        switch local {
+        case ..<3.0:
+            // Спускается сверху на нити и висит вниз головой, покачиваясь
+            let drop = min(1, local / 1.2)
+            let sway = local > 1.2 ? CGFloat(sin((local - 1.2) * 3)) * 2 : 0
+            let center = CGPoint(x: hangX + sway, y: -heroH + (hangY + heroH) * CGFloat(1 - pow(1 - drop, 3)))
+            line(CGPoint(x: hangX, y: 0), CGPoint(x: center.x, y: center.y - heroH / 2))
+            drawHero(hero, at: center, rotation: .pi + Double(sway) * 0.05)
+        case ..<3.4:
+            // Выстреливает паутину к точке над чёлкой
+            let center = CGPoint(x: hangX, y: hangY)
+            let p = CGFloat((local - 3.0) / 0.4)
+            let hand = CGPoint(x: center.x + 3, y: center.y)
+            line(hand, CGPoint(x: hand.x + (anchor.x - hand.x) * p, y: hand.y + (anchor.y - hand.y) * p))
+            drawHero(hero, at: center, rotation: .pi * Double(1 - p * 0.5))
+        case ..<4.9:
+            // Пролетает маятником под чёлкой: слева вниз, под ней и вверх справа
+            let start = CGPoint(x: hangX, y: hangY)
+            let length = hypot(start.x - anchor.x, start.y - anchor.y)
+            let theta0 = atan2(Double(start.x - anchor.x), Double(start.y - anchor.y))
+            let p = (local - 3.4) / 1.5
+            let theta = theta0 * cos(.pi * p)
+            let center = CGPoint(x: anchor.x + length * CGFloat(sin(theta)), y: anchor.y + length * CGFloat(cos(theta)))
+            line(center, anchor)
+            drawHero(hero, at: center, rotation: atan2(Double(anchor.x - center.x), Double(center.y - anchor.y)))
+        case ..<5.5:
+            // Приземлился справа, паутина втягивается
+            let center = CGPoint(x: landX, y: hangY)
+            let p = CGFloat((local - 4.9) / 0.6)
+            let hand = CGPoint(x: center.x - 3, y: center.y - heroH / 2)
+            line(hand, CGPoint(x: hand.x + (anchor.x - hand.x) * (1 - p), y: hand.y + (anchor.y - hand.y) * (1 - p)))
+            drawHero(hero, at: center, rotation: 0)
+        case ..<7.6:
+            // Уползает вверх по правой стороне и скрывается
+            let p = CGFloat((local - 5.5) / 2.1)
+            let center = CGPoint(x: landX, y: hangY - (hangY + heroH) * p)
+            drawHero(Int(t * 6) % 2 == 0 ? climbA : climbB, at: center, rotation: 0)
+        default:
+            break
         }
     }
 }
