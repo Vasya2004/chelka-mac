@@ -7,7 +7,7 @@ Chelka is a modified version of [Boring Notch](https://github.com/TheBoredTeam/b
 - Sparkle auto-update disabled (feed URL and key removed, updater not started, update UI hidden).
 - Upstream CI/release workflows and funding files removed from `.github`.
 - Welcome screen credits the original project.
-- New app icon (notch, vinyl disc, agent sparkle), drawn from scratch.
+- New app icon: a friendly face whose monobrow is the notch, with a vinyl record and an agent sparkle as eyes. Drawn from scratch.
 
 ## AI agents
 - `AgentActivityManager`: local HTTP server (`127.0.0.1:48217`) with `/agent`, `/permission`, `/usage`; session state, completion banner, sounds.
