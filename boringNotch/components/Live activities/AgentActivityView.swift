@@ -8,21 +8,62 @@
 
 import SwiftUI
 
-/// Компактный значок агента: тонкое кольцо состояния и символ внутри
+/// Компактный значок агента: комета при работе, импульс на каждое действие, замыкание кольца при завершении
 struct AgentBadge: View {
     let status: AgentStatus
     var size: CGFloat = 22
 
+    @ObservedObject private var manager = AgentActivityManager.shared
+    @State private var rippleStart: Date?
+    @State private var doneProgress: Double = 0
+    @State private var wobble: Double = 0
+
+    private func rippleProgress(_ now: Date) -> Double? {
+        guard let start = rippleStart else { return nil }
+        let p = now.timeIntervalSince(start) / 0.7
+        return p < 1 ? p : nil
+    }
+
     var body: some View {
         let tint = status.tint
-        ZStack {
-            AgentHalo(status: status, tint: tint, size: size)
-            Image(systemName: status.symbol)
-                .font(.system(size: size * (status == .running ? 0.5 : 0.45), weight: .semibold))
-                .foregroundStyle(tint)
-                .contentTransition(.symbolEffect(.replace.downUp))
+        // Покадровая перерисовка нужна только пока что-то движется
+        TimelineView(.animation(paused: !(status == .running || status == .waiting))) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            Group {
+                switch status {
+                case .running:
+                    AgentBadgeArt.Running(t: t, size: size, tint: tint, ripple: rippleProgress(timeline.date))
+                case .waiting:
+                    AgentBadgeArt.Waiting(t: t, size: size, tint: tint)
+                case .done:
+                    AgentBadgeArt.Done(progress: doneProgress, size: size, tint: tint)
+                case .error:
+                    AgentBadgeArt.Failed(size: size, tint: tint, wobble: wobble)
+                case .end:
+                    EmptyView()
+                }
+            }
         }
         .frame(width: size, height: size)
+        .onAppear { if status == .done { doneProgress = 1 } }
+        .onChange(of: status) { _, new in
+            switch new {
+            case .done:
+                doneProgress = 0
+                withAnimation(.easeOut(duration: 0.55)) { doneProgress = 1 }
+            case .error:
+                wobble = 16
+                withAnimation(.interpolatingSpring(stiffness: 260, damping: 4)) { wobble = 0 }
+            default:
+                break
+            }
+        }
+        .onChange(of: manager.activityPulse) { _, _ in
+            // Каждое действие агента (шаг, вызов инструмента) пускает волну; не чаще, чем волна успевает пройти
+            guard status == .running else { return }
+            if let start = rippleStart, Date().timeIntervalSince(start) < 0.6 { return }
+            rippleStart = Date()
+        }
     }
 }
 
@@ -146,57 +187,13 @@ struct AgentActivityView: View {
     }
 }
 
-/// Тонкое кольцо: бегущая дуга при работе, мягкое «дыхание» при ожидании
-struct AgentHalo: View {
-    let status: AgentStatus
-    let tint: Color
-    var size: CGFloat = 22
-
-    var body: some View {
-        TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            ZStack {
-                switch status {
-                case .running:
-                    Circle()
-                        .trim(from: 0, to: 0.28)
-                        .stroke(tint, style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
-                        .rotationEffect(.degrees((t * 260).truncatingRemainder(dividingBy: 360)))
-                    Circle().stroke(tint.opacity(0.12), lineWidth: 1.4)
-                case .waiting:
-                    let breath = (sin(t * 2.6) + 1) / 2
-                    Circle()
-                        .stroke(tint.opacity(0.25 + 0.5 * breath), lineWidth: 1.4)
-                        .scaleEffect(0.94 + 0.08 * breath)
-                case .done, .error:
-                    Circle().stroke(tint.opacity(0.45), lineWidth: 1.4)
-                case .end:
-                    EmptyView()
-                }
-            }
-            .frame(width: size, height: size)
-        }
-    }
-}
-
-/// Три тонких столбика, плавно «дышащие» пока агент работает
+/// Эквалайзер «только агент»: пять столбиков с неравномерным ритмом
 struct AgentEqualizer: View {
     let tint: Color
-    private let phases: [Double] = [0, 1.6, 3.1]
-    private let speeds: [Double] = [3.4, 4.3, 3.8]
 
     var body: some View {
         TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .center, spacing: 3) {
-                ForEach(0..<3, id: \.self) { i in
-                    let level = 0.35 + 0.65 * (sin(t * speeds[i] + phases[i]) + 1) / 2
-                    Capsule()
-                        .fill(tint.opacity(0.9))
-                        .frame(width: 2.2, height: 3 + 10 * level)
-                }
-            }
-            .frame(height: 16)
+            AgentBadgeArt.Equalizer(t: timeline.date.timeIntervalSinceReferenceDate, tint: tint)
         }
     }
 }

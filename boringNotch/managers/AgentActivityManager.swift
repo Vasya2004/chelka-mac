@@ -140,6 +140,8 @@ final class AgentActivityManager: ObservableObject {
     static let port: UInt16 = 48217
 
     @Published private(set) var sessions: [String: AgentSession] = [:]
+    /// Растёт на каждое «рабочее» событие агента (шаг, инструмент): по нему значок пускает волну
+    @Published private(set) var activityPulse = 0
     /// Текущее «развёрнутое» уведомление (nil — чёлка в обычном размере)
     @Published private(set) var banner: AgentBanner?
     private var bannerTask: Task<Void, Never>?
@@ -365,6 +367,7 @@ final class AgentActivityManager: ObservableObject {
 
     private func apply(_ event: AgentEvent) {
         expiryTasks[event.id]?.cancel()
+        if event.status == .running { activityPulse &+= 1 }
 
         if event.status == .end {
             if banner?.sessionID == event.id { hideBanner() }
