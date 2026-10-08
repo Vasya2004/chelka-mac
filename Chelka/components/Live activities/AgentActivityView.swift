@@ -143,9 +143,9 @@ struct AgentActivityView: View {
             let tint = session.status.tint
             HStack(spacing: 0) {
                 // Значок прижат к левому краю с небольшим отступом
-                AgentBadge(status: session.status)
+                AgentBadge(status: session.status, size: 20)   // тот же размер, что справа рядом с музыкой
                     .overlay(alignment: .topTrailing) { countBadge }
-                    .padding(.leading, 7)   // значок на 1 пункт ближе к левому краю
+                    .padding(.leading, 5)   // чуть ближе к левому краю
                     .frame(width: Self.sideWidth, alignment: .leading)
 
                 Spacer(minLength: 0)
