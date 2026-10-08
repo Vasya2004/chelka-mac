@@ -7,7 +7,6 @@
 //  показывает ровно то же, что и «чёлка».
 //
 
-import AppKit
 import SwiftUI
 
 /// Строка простоя в закрытой «чёлке»: левая зона, сама чёлка, правая зона
@@ -23,7 +22,7 @@ struct IdleAnimationView: View {
         // 30 кадров в секунду хватает для пиксельной графики и почти не нагружает процессор
         TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
             IdleArt(style: style, t: timeline.date.timeIntervalSinceReferenceDate,
-                    notchWidth: notchWidth, side: Self.sideWidth, followMouse: true)
+                    notchWidth: notchWidth, side: Self.sideWidth)
         }
         .frame(width: notchWidth + 2 * Self.sideWidth, height: height)
         .allowsHitTesting(false)
@@ -36,8 +35,6 @@ struct IdleArt: View {
     let t: Double
     let notchWidth: CGFloat
     let side: CGFloat
-    /// Глаза следят за курсором (в превью — тоже, относительно верхнего края экрана)
-    var followMouse = true
 
     var body: some View {
         Canvas { context, size in
@@ -51,32 +48,17 @@ struct IdleArt: View {
             switch style {
             case .off: break
             case .cat: IdleCat.draw(in: &context, zones: zones, t: t)
-            case .eyes: IdleEyes.draw(in: &context, zones: zones, t: t, mouse: followMouse ? Self.mouseVector(zones: zones) : nil)
             case .pong: IdlePong.draw(in: &context, zones: zones, t: t)
             case .fireflies: IdleFireflies.draw(in: &context, zones: zones, t: t)
-            case .face: IdleFace.draw(in: &context, zones: zones, t: t)
             case .fish: IdleFish.draw(in: &context, zones: zones, t: t)
             case .snake: IdleSnake.draw(in: &context, zones: zones, t: t)
             case .clock: IdleClock.draw(in: &context, zones: zones, t: t)
             case .chomp: IdleChomp.draw(in: &context, zones: zones, t: t)
             case .matrix: IdleMatrix.draw(in: &context, zones: zones, t: t)
             case .rain: IdleRain.draw(in: &context, zones: zones, t: t)
-            case .lava: IdleLava.draw(in: &context, zones: zones, t: t)
-            case .blackHole: IdleBlackHole.draw(in: &context, zones: zones, t: t)
-            case .ufo: IdleUFO.draw(in: &context, zones: zones, t: t)
             case .campfire: IdleCampfire.draw(in: &context, zones: zones, t: t)
-            case .sky: IdleSky.draw(in: &context, zones: zones, t: t)
-            case .life: IdleLife.draw(in: &context, zones: zones, t: t)
             }
         }
-    }
-
-    /// Положение курсора относительно центра «чёлки» в точках экрана (y вниз)
-    private static func mouseVector(zones: IdleZones) -> CGPoint? {
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main else { return nil }
-        let mouse = NSEvent.mouseLocation
-        let center = CGPoint(x: screen.frame.midX, y: screen.frame.maxY - zones.size.height / 2)
-        return CGPoint(x: mouse.x - center.x, y: center.y - mouse.y)
     }
 }
 
@@ -243,47 +225,6 @@ private enum IdleCat {
     }
 }
 
-// MARK: - Глаза
-
-/// Два глаза по бокам чёлки: следят за курсором и иногда моргают — чёлка становится лицом
-private enum IdleEyes {
-    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double, mouse: CGPoint?) {
-        let h = zones.size.height
-        let eye = min(h * 0.5, zones.left.width * 0.5)
-        // Моргание: каждые ~4 секунды веки быстро смыкаются; иногда двойное
-        let blinkPhase = t.truncatingRemainder(dividingBy: 4.3)
-        let closed = blinkPhase < 0.14 || (Int(t / 4.3) % 3 == 0 && blinkPhase > 0.3 && blinkPhase < 0.42)
-        let openness: CGFloat = closed ? 0.12 : 1
-
-        for zone in [zones.left, zones.right] {
-            let center = CGPoint(x: zone.midX, y: h / 2)
-            let rect = CGRect(x: center.x - eye / 2, y: center.y - eye * openness / 2, width: eye, height: eye * openness)
-            context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.95)))
-            guard !closed else { continue }
-
-            // Зрачок смещается к курсору; без курсора — медленно «оглядывается»
-            var offset: CGPoint
-            if let mouse {
-                // Вектор от этого глаза до курсора (центр зоны относительно середины чёлки)
-                let dx = mouse.x - (center.x - zones.size.width / 2)
-                let dy = mouse.y - (center.y - h / 2)
-                let length = max(1, hypot(dx, dy))
-                let reach = eye * 0.24 * min(1, length / 80)
-                offset = CGPoint(x: dx / length * reach, y: dy / length * reach)
-            } else {
-                offset = CGPoint(x: CGFloat(sin(t * 0.9)) * eye * 0.22, y: CGFloat(sin(t * 0.6)) * eye * 0.1)
-            }
-            let pupil = eye * 0.46
-            context.fill(Path(ellipseIn: CGRect(x: center.x + offset.x - pupil / 2, y: center.y + offset.y - pupil / 2,
-                                                width: pupil, height: pupil)), with: .color(.black))
-            // Блик
-            let glint = pupil * 0.32
-            context.fill(Path(ellipseIn: CGRect(x: center.x + offset.x + pupil * 0.08, y: center.y + offset.y - pupil * 0.38,
-                                                width: glint, height: glint)), with: .color(.white.opacity(0.9)))
-        }
-    }
-}
-
 // MARK: - Пинг-понг
 
 /// Пиксельный понг: мяч летает между ракетками по краям и пролетает «за» чёлкой
@@ -349,26 +290,6 @@ private enum IdleFireflies {
                              with: .color(Color.white.opacity(0.9 * pulse)))
             }
         }
-    }
-}
-
-// MARK: - Классическое лицо
-
-/// Мордочка из оригинального boring.notch: глаза-точки, нос и улыбка справа от чёлки
-private enum IdleFace {
-    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
-        let c = CGPoint(x: zones.right.midX, y: zones.size.height / 2)
-        let blink = t.truncatingRemainder(dividingBy: 3) < 0.12
-        let eyeH: CGFloat = blink ? 1 : 4
-        for dx in [-4.0, 4.0] {
-            context.fill(Path(roundedRect: CGRect(x: c.x + dx - 2, y: c.y - 7 - eyeH / 2, width: 4, height: eyeH), cornerRadius: 2),
-                         with: .color(.white))
-        }
-        context.fill(Path(roundedRect: CGRect(x: c.x - 1.5, y: c.y - 2, width: 3, height: 4), cornerRadius: 1.5), with: .color(.white))
-        var mouth = Path()
-        mouth.move(to: CGPoint(x: c.x - 7, y: c.y + 4))
-        mouth.addQuadCurve(to: CGPoint(x: c.x + 7, y: c.y + 4), control: CGPoint(x: c.x, y: c.y + 10))
-        context.stroke(mouth, with: .color(.white), lineWidth: 2)
     }
 }
 
@@ -684,171 +605,6 @@ private enum IdleRain {
     }
 }
 
-// MARK: - Лава-лампа
-
-/// Капли «лавы» поднимаются, сливаются и расходятся (метаболы: размытие + порог прозрачности)
-private enum IdleLava {
-    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
-        let h = zones.size.height
-        let colors = [Color(red: 1, green: 0.32, blue: 0.55), Color(red: 1, green: 0.55, blue: 0.15)]
-        for (index, zone) in [zones.left, zones.right].enumerated() {
-            context.drawLayer { layer in
-                layer.addFilter(.alphaThreshold(min: 0.5, color: colors[index]))
-                layer.addFilter(.blur(radius: 3))
-                for i in 0..<4 {
-                    let seed = Double(index * 4 + i)
-                    let x = zone.midX + CGFloat(sin(t * 0.4 + seed * 2.1)) * zone.width * 0.22
-                    let y = h / 2 + CGFloat(sin(t * (0.55 + 0.12 * Double(i)) + seed * 1.3)) * h * 0.36
-                    let r = CGFloat(4.5 + 1.8 * sin(t * 0.7 + seed))
-                    layer.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: .color(.white))
-                }
-                // «Лужица» лавы на дне
-                layer.fill(Path(CGRect(x: zone.minX + 4, y: h - 4, width: zone.width - 8, height: 8)), with: .color(.white))
-            }
-        }
-    }
-}
-
-// MARK: - Чёрная дыра
-
-/// Чёлка — горизонт событий: частицы по спирали затягиваются в неё, у краёв светится аккреционный диск
-private enum IdleBlackHole {
-    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
-        let h = zones.size.height
-        let center = CGPoint(x: zones.size.width / 2, y: h / 2)
-        let horizon = zones.right.minX - center.x
-
-        // Свечение у кромки чёлки
-        let pulse = 0.75 + 0.25 * sin(t * 2)
-        context.fill(Path(CGRect(origin: .zero, size: zones.size)),
-                     with: .radialGradient(Gradient(colors: [Color(red: 1, green: 0.6, blue: 0.25).opacity(0.55 * pulse),
-                                                             Color(red: 0.6, green: 0.3, blue: 1).opacity(0.18), .clear]),
-                                           center: center, startRadius: horizon - 2, endRadius: horizon + 22))
-
-        for side in [-1.0, 1.0] {
-            for i in 0..<7 {
-                let seed = Double(i) * 0.37 + (side > 0 ? 0.11 : 0.53)
-                // Каждая частица падает 2,4 с, со своим сдвигом по фазе
-                let phase = (t / 2.4 + seed).truncatingRemainder(dividingBy: 1)
-                for trail in 0..<4 {
-                    let p = phase - Double(trail) * 0.025
-                    guard p > 0 else { continue }
-                    // Ускоряется к горизонту, по вертикали сходится по спирали
-                    let fall = CGFloat(pow(p, 1.8))
-                    let distance = horizon + 34 - 34 * fall
-                    let swirl = CGFloat(sin(p * 9 + seed * 20)) * (h * 0.42) * (1 - fall)
-                    let point = CGPoint(x: center.x + CGFloat(side) * distance, y: center.y + swirl)
-                    let heat = Double(fall)
-                    let color = Color(red: 0.55 + 0.45 * heat, green: 0.7 - 0.1 * heat, blue: 1 - 0.75 * heat)
-                    let size: CGFloat = trail == 0 ? 1.8 : 1.2
-                    context.fill(Path(ellipseIn: CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)),
-                                 with: .color(color.opacity((1 - Double(trail) * 0.28) * min(1, p * 6))))
-                }
-            }
-        }
-    }
-}
-
-// MARK: - НЛО
-
-/// Корова мирно пасётся справа, прилетает тарелка и забирает её лучом; через пару секунд корову возвращают
-private enum IdleUFO {
-    static let saucer = Sprite(rows: [
-        "....###....",
-        "...#ooo#...",
-        ".#########.",
-        "###########",
-        ".#########.",
-    ])
-    static let cow = Sprite(rows: [
-        "........#.",
-        ".######-##",
-        "#-##-####o",
-        ".#####-##.",
-        ".#.#..#.#.",
-    ])
-    static let cowGrazing = Sprite(rows: [
-        "..........",
-        ".######-..",
-        "#-##-#####",
-        ".#####-#o#",
-        ".#.#..#.#.",
-    ])
-
-    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
-        let h = zones.size.height
-        let zone = zones.right
-        let ground = h - 3
-        let hover = CGFloat(sin(t * 3)) * 1
-        let cycle = 16.0
-        let local = t.truncatingRemainder(dividingBy: cycle)
-        let ufoY: CGFloat = 12 + hover
-        let silver = Color(white: 0.78)
-        let dome = Color(red: 0.55, green: 0.9, blue: 1)
-        let cowColor = Color.white
-        let spots = Color(white: 0.3)
-        let muzzle = Color(red: 1, green: 0.6, blue: 0.7)
-
-        // Тарелка: 0–2 выплывает из-под чёлки, 2–9 висит над коровой, 9–11 улетает обратно
-        var ufoX: CGFloat? = nil
-        switch local {
-        case ..<2: ufoX = zone.minX - 14 + (zone.midX - zone.minX + 14) * CGFloat(local / 2)
-        case ..<9: ufoX = zone.midX
-        case ..<11: ufoX = zone.midX - (zone.midX - zone.minX + 20) * CGFloat((local - 9) / 2)
-        default: break
-        }
-
-        // Корова: пасётся → поднимается в луче → её нет → падает обратно
-        switch local {
-        case ..<3:
-            (Int(t * 2) % 2 == 0 ? cow : cowGrazing).draw(in: &context, x: zone.midX, bottom: ground, pixel: 1.5,
-                                                          color: cowColor, accent: muzzle, flip: false, dark: spots)
-        case ..<8.5:
-            let lift = CGFloat((local - 3) / 5.5)
-            let y = ground - (ground - ufoY - 4) * lift * lift
-            // Луч
-            var beam = Path()
-            beam.move(to: CGPoint(x: zone.midX - 3, y: ufoY + 2))
-            beam.addLine(to: CGPoint(x: zone.midX + 3, y: ufoY + 2))
-            beam.addLine(to: CGPoint(x: zone.midX + 10, y: ground))
-            beam.addLine(to: CGPoint(x: zone.midX - 10, y: ground))
-            beam.closeSubpath()
-            let flicker = 0.25 + 0.1 * sin(t * 20)
-            context.fill(beam, with: .linearGradient(Gradient(colors: [dome.opacity(flicker + 0.2), dome.opacity(flicker * 0.4)]),
-                                                     startPoint: CGPoint(x: 0, y: ufoY), endPoint: CGPoint(x: 0, y: ground)))
-            // Корова в луче крутится: через раз смотрит в другую сторону
-            cow.draw(in: &context, x: zone.midX, bottom: y, pixel: 1.5, color: cowColor, accent: muzzle,
-                     flip: Int(t * 3) % 2 == 0, dark: spots)
-        case 13...:
-            // Возвращают: падает сверху и приземляется
-            let fall = CGFloat(min(1, (local - 13) / 0.8))
-            cow.draw(in: &context, x: zone.midX, bottom: 4 + (ground - 4) * fall, pixel: 1.5, color: cowColor,
-                     accent: muzzle, flip: false, dark: spots)
-        default: break
-        }
-
-        if let x = ufoX {
-            saucer.draw(in: &context, x: x, bottom: ufoY + 3, pixel: 1.5, color: silver, accent: dome, flip: false)
-            // Огоньки по кругу бегут
-            for i in 0..<4 {
-                let on = (Int(t * 8) + i) % 4 == 0
-                context.fill(Path(CGRect(x: x - 6 + CGFloat(i) * 4, y: ufoY + 1.5, width: 1.5, height: 1.5)),
-                             with: .color(on ? Color.yellow : Color(white: 0.4)))
-            }
-        }
-
-        // Левая зона: пастбище — травинки колышутся
-        for i in 0..<5 {
-            let x = zones.left.minX + 7 + CGFloat(i) * 5.5
-            let sway = CGFloat(sin(t * 2 + Double(i))) * 1
-            var blade = Path()
-            blade.move(to: CGPoint(x: x, y: ground + 1))
-            blade.addLine(to: CGPoint(x: x + sway, y: ground - 3 - CGFloat(i % 2) * 2))
-            context.stroke(blade, with: .color(Color(red: 0.35, green: 0.8, blue: 0.4)), lineWidth: 1)
-        }
-    }
-}
-
 // MARK: - Костёр
 
 /// Пиксельные костры по бокам: языки пламени пляшут, искры улетают вверх
@@ -892,138 +648,5 @@ private enum IdleCampfire {
                          with: .radialGradient(Gradient(colors: [Color.orange.opacity(0.18), .clear]),
                                                center: CGPoint(x: zone.midX, y: base - 4), startRadius: 0, endRadius: 16))
         }
-    }
-}
-
-// MARK: - День и ночь
-
-/// Солнце восходит слева, проходит за чёлкой и садится справа; ночью — луна и звёзды
-private enum IdleSky {
-    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
-        let w = zones.size.width
-        let h = zones.size.height
-        let cycle = 40.0
-        let local = t.truncatingRemainder(dividingBy: cycle)
-        let day = local < cycle / 2
-        let p = (day ? local : local - cycle / 2) / (cycle / 2)
-        let x = 4 + (w - 8) * CGFloat(p)
-        let y = h * 0.85 - h * 0.62 * CGFloat(sin(.pi * p))
-
-        // Днём по бокам — голубое небо, ярче всего в полдень
-        let daylight = day ? sin(.pi * p) : 0
-        if daylight > 0.02 {
-            for zone in [zones.left, zones.right] {
-                context.fill(Path(zone), with: .linearGradient(
-                    Gradient(colors: [Color(red: 0.25, green: 0.55, blue: 1).opacity(0.45 * daylight), .clear]),
-                    startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: 0, y: h)))
-            }
-            // Облачко медленно плывёт
-            let cloudX = zones.left.minX + CGFloat((t * 4).truncatingRemainder(dividingBy: Double(w + 20))) - 10
-            for (dx, dy, r) in [(0.0, 0.0, 3.0), (4.0, -1.5, 3.5), (8.0, 0.0, 3.0)] {
-                let cx = cloudX + CGFloat(dx)
-                let cy = h * 0.3 + CGFloat(dy)
-                context.fill(Path(ellipseIn: CGRect(x: cx - CGFloat(r), y: cy - CGFloat(r), width: CGFloat(r) * 2, height: CGFloat(r) * 2)),
-                             with: .color(.white.opacity(0.8 * daylight)))
-            }
-        }
-
-        // Звёзды проступают ночью и гаснут на рассвете
-        let night = day ? 0 : min(1, sin(.pi * p) * 1.6)
-        if night > 0.02 {
-            for (index, zone) in [zones.left, zones.right].enumerated() {
-                for i in 0..<9 {
-                    let seed = Double(index * 9 + i) + 1
-                    let sx = zone.minX + 2 + (zone.width - 4) * CGFloat((seed * 0.618).truncatingRemainder(dividingBy: 1))
-                    let sy = h * CGFloat(0.1 + (seed * 0.414).truncatingRemainder(dividingBy: 0.7))
-                    let twinkle = 0.45 + 0.55 * sin(t * 3 + seed * 2)
-                    let size: CGFloat = i % 3 == 0 ? 2 : 1.2
-                    context.fill(Path(CGRect(x: sx, y: sy, width: size, height: size)), with: .color(.white.opacity(night * twinkle)))
-                }
-            }
-        }
-
-        // Зарево у горизонта на восходе и закате
-        let edge = day ? max(0, 1 - min(p, 1 - p) * 5) : 0
-        if edge > 0 {
-            let glowX = p < 0.5 ? zones.left.midX : zones.right.midX
-            context.fill(Path(CGRect(x: glowX - 30, y: h - 14, width: 60, height: 14)),
-                         with: .radialGradient(Gradient(colors: [Color(red: 1, green: 0.45, blue: 0.2).opacity(0.45 * edge), .clear]),
-                                               center: CGPoint(x: glowX, y: h), startRadius: 0, endRadius: 24))
-        }
-
-        if day {
-            context.fill(Path(ellipseIn: CGRect(x: x - 11, y: y - 11, width: 22, height: 22)),
-                         with: .radialGradient(Gradient(colors: [Color.yellow.opacity(0.35), .clear]),
-                                               center: CGPoint(x: x, y: y), startRadius: 3, endRadius: 11))
-            context.fill(Path(ellipseIn: CGRect(x: x - 4.5, y: y - 4.5, width: 9, height: 9)),
-                         with: .color(Color(red: 1, green: 0.85, blue: 0.3)))
-        } else {
-            // Месяц: светлый круг, из которого «вырезан» второй
-            var moon = Path(ellipseIn: CGRect(x: x - 4.5, y: y - 4.5, width: 9, height: 9))
-            moon = moon.subtracting(Path(ellipseIn: CGRect(x: x - 2, y: y - 6, width: 9, height: 9)))
-            context.fill(moon, with: .color(Color(red: 0.92, green: 0.94, blue: 1)))
-        }
-        // Линия горизонта
-        context.fill(Path(CGRect(x: 0, y: h - 1.5, width: w, height: 1)), with: .color(.white.opacity(0.12)))
-    }
-}
-
-// MARK: - Игра «Жизнь»
-
-/// Клеточный автомат Конвея: узоры рождаются, живут и умирают; каждые 16 секунд — новый посев
-private enum IdleLife {
-    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
-        let cell: CGFloat = 3
-        let generationsPerEpoch = 80
-        let generation = Int(t * 5)
-        let epoch = generation / generationsPerEpoch
-        let step = generation % generationsPerEpoch
-
-        for (index, zone) in [zones.left, zones.right].enumerated() {
-            let cols = Int(zone.width / cell) - 1
-            let rows = Int(zone.size.height / cell)
-            guard cols > 2, rows > 2 else { continue }
-            var grid = seed(cols: cols, rows: rows, seed: UInt64(epoch * 2 + index + 1))
-            for _ in 0..<step { grid = next(grid, cols: cols, rows: rows) }
-
-            let originX = zone.minX + (zone.width - CGFloat(cols) * cell) / 2
-            let originY = (zone.size.height - CGFloat(rows) * cell) / 2
-            // Новый посев плавно проявляется, к концу эпохи узор гаснет
-            let fade = min(1, Double(step) / 6, Double(generationsPerEpoch - step) / 6)
-            for r in 0..<rows {
-                for c in 0..<cols where grid[r * cols + c] {
-                    context.fill(Path(CGRect(x: originX + CGFloat(c) * cell, y: originY + CGFloat(r) * cell,
-                                             width: cell - 0.6, height: cell - 0.6)),
-                                 with: .color(Color(red: 0.45, green: 0.85, blue: 1).opacity(0.3 + 0.65 * fade)))
-                }
-            }
-        }
-    }
-
-    /// Случайный, но воспроизводимый посев (~35% живых клеток)
-    private static func seed(cols: Int, rows: Int, seed: UInt64) -> [Bool] {
-        var state = seed &* 6364136223846793005 &+ 1442695040888963407
-        return (0..<(cols * rows)).map { _ in
-            state = state &* 6364136223846793005 &+ 1442695040888963407
-            return (state >> 33) % 100 < 35
-        }
-    }
-
-    /// Следующее поколение на торе (края склеены)
-    private static func next(_ grid: [Bool], cols: Int, rows: Int) -> [Bool] {
-        var result = [Bool](repeating: false, count: grid.count)
-        for r in 0..<rows {
-            for c in 0..<cols {
-                var neighbours = 0
-                for dr in -1...1 {
-                    for dc in -1...1 where dr != 0 || dc != 0 {
-                        if grid[((r + dr + rows) % rows) * cols + (c + dc + cols) % cols] { neighbours += 1 }
-                    }
-                }
-                let alive = grid[r * cols + c]
-                result[r * cols + c] = neighbours == 3 || (alive && neighbours == 2)
-            }
-        }
-        return result
     }
 }

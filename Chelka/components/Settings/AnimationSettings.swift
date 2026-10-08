@@ -136,7 +136,7 @@ struct AnimationSettings: View {
             } header: {
                 Text("When nothing is active")
             } footer: {
-                Text("Plays around the closed notch while no AI agent is working and no media is playing. The eyes follow your cursor.")
+                Text("Plays around the closed notch while no AI agent is working and no media is playing.")
             }
 
             Section {

@@ -91,28 +91,21 @@ enum DoneStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
 
 /// Анимация закрытой «чёлки» в простое: нет ни работающих нейросетей, ни медиа
 enum IdleStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case off, cat, eyes, pong, fireflies, face, fish, snake, clock, chomp, matrix, rain, lava, blackHole, ufo, campfire, sky, life
+    case off, cat, pong, fireflies, fish, snake, clock, chomp, matrix, rain, campfire
     var id: String { rawValue }
     var title: String {
         switch self {
         case .off: return "Off"
         case .cat: return "Pixel cat"
-        case .eyes: return "Eyes"
         case .pong: return "Pong"
         case .fireflies: return "Fireflies"
-        case .face: return "Classic face"
         case .fish: return "Aquarium"
         case .snake: return "Snake"
         case .clock: return "Pixel clock"
         case .chomp: return "Chomp"
         case .matrix: return "Matrix"
         case .rain: return "Rain"
-        case .lava: return "Lava lamp"
-        case .blackHole: return "Black hole"
-        case .ufo: return "UFO"
         case .campfire: return "Campfire"
-        case .sky: return "Day & night"
-        case .life: return "Life"
         }
     }
 }
