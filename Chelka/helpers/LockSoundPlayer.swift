@@ -33,11 +33,45 @@ final class LockSoundPlayer {
         player.play()
     }
 
+    /// Сигнал завершения играет отдельным AVAudioPlayer, а не через общий движок: движок после смены
+    /// устройства вывода, сна или перезапуска аудиосистемы мог тихо остановиться, и сигнал пропадал.
+    /// Задержка здесь не важна (в отличие от щелчка блокировки), зато каждый раз звук стартует с нуля.
+    private var agentDonePlayer: AVAudioPlayer?
+    private lazy var agentDoneWAV: Data = Self.wavData(from: agentDoneBuffer)
+
     func playAgentDone() {
-        configureIfNeeded()
-        startEngineIfNeeded()
-        player.scheduleBuffer(agentDoneBuffer, at: nil, options: .interrupts, completionHandler: nil)
-        if !player.isPlaying { player.play() }
+        do {
+            let player = try AVAudioPlayer(data: agentDoneWAV)
+            player.volume = 1
+            player.prepareToPlay()
+            agentDonePlayer = player
+            if !player.play() { throw CocoaError(.fileReadUnknown) }
+        } catch {
+            // Запасной путь: прежний вариант через движок
+            configureIfNeeded()
+            if !engine.isRunning { engine.prepare(); try? engine.start() }
+            player.stop()
+            player.scheduleBuffer(agentDoneBuffer, at: nil, options: .interrupts, completionHandler: nil)
+            player.play()
+        }
+    }
+
+    /// Моно 16 бит PCM в контейнере WAV — из готового буфера
+    private static func wavData(from buffer: AVAudioPCMBuffer) -> Data {
+        let frames = Int(buffer.frameLength)
+        let rate = UInt32(buffer.format.sampleRate)
+        let samples = buffer.floatChannelData![0]
+        var data = Data()
+        func append<T: FixedWidthInteger>(_ value: T) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
+        let byteCount = UInt32(frames * 2)
+        data.append(contentsOf: Array("RIFF".utf8)); append(36 + byteCount)
+        data.append(contentsOf: Array("WAVEfmt ".utf8)); append(UInt32(16))
+        append(UInt16(1)); append(UInt16(1)); append(rate); append(rate * 2); append(UInt16(2)); append(UInt16(16))
+        data.append(contentsOf: Array("data".utf8)); append(byteCount)
+        for i in 0..<frames {
+            append(Int16(max(-1, min(1, samples[i])) * 32_000))
+        }
+        return data
     }
 
     func play(_ kind: LockAnimationKind) {
