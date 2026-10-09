@@ -11,12 +11,18 @@ import SwiftUI
 struct AgentSessionChipsView: View {
     @ObservedObject private var manager = AgentActivityManager.shared
 
+    private let columns = [
+        GridItem(.flexible(), spacing: agentChipSpacing),
+        GridItem(.flexible(), spacing: agentChipSpacing),
+    ]
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+        // Два столбца; больше двух рядов не помещается — остальные прокручиваются
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVGrid(columns: columns, spacing: agentChipSpacing) {
                 ForEach(manager.orderedSessions) { session in
                     AgentSessionChip(session: session)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
             }
             .padding(.horizontal, 2)
@@ -38,27 +44,29 @@ private struct AgentSessionChip: View {
             Button {
                 AgentActivityManager.shared.jump(to: session.id)
             } label: {
-                HStack(spacing: 7) {
+                HStack(spacing: 8) {
                     StatusPulse(status: session.status, tint: tint)
-                        .frame(width: 14, height: 14)
+                        .frame(width: 16, height: 16)
 
                     Text(session.agent)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .lineLimit(1)
                         .foregroundStyle(.white.opacity(session.status == .idle ? 0.6 : 1))
                     if let project = session.project, !project.isEmpty {
                         Text(project)
-                            .font(.system(size: 11))
+                            .font(.system(size: 12))
                             .foregroundStyle(.white.opacity(session.status == .idle ? 0.3 : 0.45))
                             .lineLimit(1)
                             .truncationMode(.tail)
-                            .frame(maxWidth: 110, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     // Подпись статуса только когда нужно внимание: «работает» видно по точке, «неактивна» — по приглушённому виду
                     if session.status != .running && session.status != .idle {
                         Text(session.status.label)
-                            .font(.system(size: 10.5, weight: .medium))
+                            .font(.system(size: 11.5, weight: .medium))
                             .foregroundStyle(tint)
                     }
+                    Spacer(minLength: 0)
                 }
                 .contentShape(Rectangle())
             }
@@ -70,9 +78,9 @@ private struct AgentSessionChip: View {
                 AgentActivityManager.shared.remove(session.id)
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 8.5, weight: .bold))
-                    .foregroundStyle(.white.opacity(hoveringRemove ? 0.95 : (hovering ? 0.6 : 0.35)))
-                    .frame(width: 16, height: 16)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white.opacity(hoveringRemove ? 0.95 : (hovering ? 0.65 : 0.4)))
+                    .frame(width: 22, height: 22)
                     .background(Circle().fill(.white.opacity(hoveringRemove ? 0.2 : 0)))
                     .contentShape(Circle())
             }
@@ -80,9 +88,10 @@ private struct AgentSessionChip: View {
             .onHover { hoveringRemove = $0 }
             .help("Remove from the list")
         }
-        .padding(.leading, 10)
-        .padding(.trailing, 5)
-        .frame(height: 24)
+        .padding(.leading, 12)
+        .padding(.trailing, 6)
+        .frame(maxWidth: .infinity)
+        .frame(height: agentChipHeight)
         .background(Capsule().fill(.white.opacity(hovering ? 0.14 : 0.08)))
         .overlay(Capsule().stroke(session.status == .waiting ? tint.opacity(0.6) : .clear, lineWidth: 1))
         .onHover { hovering = $0 }

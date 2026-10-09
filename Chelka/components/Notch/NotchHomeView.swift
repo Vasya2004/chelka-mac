@@ -449,7 +449,7 @@ struct NotchHomeView: View {
             // Активные сессии нейросетей — под лимитами, самым нижним рядом
             if vm.agentChipsVisible {
                 AgentSessionChipsView()
-                    .frame(height: agentChipsHeight - 6)
+                    .frame(height: agentChipsBlockHeight(sessionCount: AgentActivityManager.shared.sessions.count) - 6)
                     .transition(.opacity.combined(with: .offset(y: 4)))
             }
         }

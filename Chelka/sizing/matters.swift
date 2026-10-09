@@ -16,9 +16,21 @@ let shadowPadding: CGFloat = 20
 let openNotchSize: CGSize = .init(width: 640, height: 190)
 /// Высота полосы с лимитами ИИ внизу главного экрана (добавляется к открытой «чёлке», когда полоса включена)
 let usageStripHeight: CGFloat = 38
-/// Высота ряда активных сессий нейросетей на главном экране (добавляется, пока есть хотя бы одна сессия)
-let agentChipsHeight: CGFloat = 30
-let windowSize: CGSize = .init(width: openNotchSize.width, height: openNotchSize.height + usageStripHeight + agentChipsHeight + shadowPadding)
+/// Плашки активных сессий нейросетей на главном экране: два столбца, одновременно видны до двух рядов (остальные прокручиваются)
+let agentChipHeight: CGFloat = 34
+let agentChipSpacing: CGFloat = 6
+let agentChipsMaxRows = 2
+
+/// Высота блока плашек вместе с отступом сверху; для нуля сессий — 0
+func agentChipsBlockHeight(sessionCount: Int) -> CGFloat {
+    guard sessionCount > 0 else { return 0 }
+    let rows = min(agentChipsMaxRows, (sessionCount + 1) / 2)
+    return CGFloat(rows) * agentChipHeight + CGFloat(rows - 1) * agentChipSpacing + 6
+}
+
+let windowSize: CGSize = .init(
+    width: openNotchSize.width,
+    height: openNotchSize.height + usageStripHeight + agentChipsBlockHeight(sessionCount: agentChipsMaxRows * 2) + shadowPadding)
 let cornerRadiusInsets: (opened: (top: CGFloat, bottom: CGFloat), closed: (top: CGFloat, bottom: CGFloat)) = (opened: (top: 19, bottom: 24), closed: (top: 6, bottom: 14))
 
 enum MusicPlayerImageSizes {

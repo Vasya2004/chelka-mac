@@ -174,7 +174,7 @@ struct ContentView: View {
                 
                 mainLayout
                     // Ряд активных сессий на главном экране меняет высоту открытой «чёлки», когда сессия появляется или пропадает
-                    .onChange(of: agentManager.sessions.isEmpty) { _, _ in
+                    .onChange(of: agentManager.sessions.count) { _, _ in
                         withAnimation(.smooth(duration: 0.3)) { vm.refreshOpenHeight() }
                     }
                     .onChange(of: Defaults[.showAgentActivity]) { _, _ in

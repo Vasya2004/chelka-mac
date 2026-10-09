@@ -192,7 +192,7 @@ class BoringViewModel: NSObject, ObservableObject {
     var openHeight: CGFloat {
         openNotchSize.height
             + (Defaults[.showAIUsage] ? usageStripHeight : 0)
-            + (agentChipsVisible ? agentChipsHeight : 0)
+            + (agentChipsVisible ? agentChipsBlockHeight(sessionCount: AgentActivityManager.shared.sessions.count) : 0)
     }
 
     /// Ряд сессий нейросетей на главном экране показывается, пока есть хотя бы одна сессия
