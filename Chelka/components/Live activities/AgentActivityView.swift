@@ -332,7 +332,8 @@ struct AgentElapsedTimer: View {
 /// Блок под строкой «чёлки»: чёлка разворачивается и показывает, что агент закончил (или ждёт вас)
 struct AgentBannerView: View {
     let banner: AgentBanner
-    static let width: CGFloat = 280
+    /// Ширина плашки равна ширине строки «чёлки», в которой она показана
+    let width: CGFloat
 
     @State private var drawn = false
     @State private var ripple = false
@@ -375,6 +376,8 @@ struct AgentBannerView: View {
                 Text(title)
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 if let subtitle {
                     Text(subtitle)
                         .font(.system(size: 11))
@@ -388,7 +391,7 @@ struct AgentBannerView: View {
         .padding(.horizontal, 16)
         .padding(.top, 2)
         .padding(.bottom, 10)
-        .frame(width: Self.width, alignment: .leading)
+        .frame(width: width, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture { AgentActivityManager.shared.jump(to: banner.sessionID) }
         .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))

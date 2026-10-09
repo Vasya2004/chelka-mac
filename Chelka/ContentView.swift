@@ -108,7 +108,8 @@ struct ContentView: View {
     private var agentRowWidth: CGFloat {
         let base = vm.closedNotchSize.width + 2 * agentSideWidth
         if agentPermissionVisible { return max(base, AgentPermissionView.width) }
-        return agentBannerVisible ? max(base, AgentBannerView.width) : base
+        // Плашка «закончил» ширины обычной строки: «чёлка» не раздувается и не «съезжает» при появлении и скрытии
+        return base
     }
 
     private var computedChinWidth: CGFloat {
@@ -377,7 +378,7 @@ struct ContentView: View {
                           AgentPermissionView(request: request, extraCount: agentManager.pendingPermissions.count - 1)
                               .id(request.id)
                       } else if agentBannerVisible, let banner = agentManager.banner {
-                          AgentBannerView(banner: banner)
+                          AgentBannerView(banner: banner, width: agentRowWidth)
                               .id(banner.id)
                       }
 
