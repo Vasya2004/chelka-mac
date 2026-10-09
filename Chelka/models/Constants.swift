@@ -92,7 +92,7 @@ enum DoneStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
 /// Размеры закрытой «чёлки»: ширина боковых зон одна для всех состояний (простой, музыка, нейросеть, музыка + нейросеть),
 /// поэтому «чёлка» не меняет ширину при смене состояния
 enum ClosedNotchLayout {
-    static let sideWidth: CGFloat = 42
+    static let sideWidth: CGFloat = 36
 }
 
 /// Анимация закрытой «чёлки» в простое: нет ни работающих нейросетей, ни медиа
