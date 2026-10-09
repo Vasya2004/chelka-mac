@@ -54,7 +54,7 @@ final class CodexActivityWatcher {
                 // «Закончил» показываем только если видели, как он работал (иначе это старая сессия)
                 manager.report(id: snap.id, agent: "Codex", status: .done, task: nil, project: snap.project, cwd: snap.cwd)
             case .end where previous == .running:
-                manager.report(id: snap.id, agent: "Codex", status: .end, task: nil, project: snap.project, cwd: snap.cwd)
+                manager.report(id: snap.id, agent: "Codex", status: .idle, task: nil, project: snap.project, cwd: snap.cwd)
             case .running where previous == .running:
                 // Долгий ход: раз в минуту подтверждаем «работает», чтобы запись в менеджере не истекла до завершения
                 if Date().timeIntervalSince(heartbeat[snap.id] ?? .distantPast) > 60 {
@@ -70,7 +70,7 @@ final class CodexActivityWatcher {
         // Лог давно не менялся (сессия закрыта): если она «работала», убираем из индикатора
         for (id, status) in known where !seen.contains(id) {
             if status == .running {
-                manager.report(id: id, agent: "Codex", status: .end, task: nil, project: nil, cwd: nil)
+                manager.report(id: id, agent: "Codex", status: .idle, task: nil, project: nil, cwd: nil)
             }
             known[id] = nil
         }

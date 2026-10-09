@@ -17,7 +17,8 @@ enum AgentStatus: String, Codable {
     case waiting
     case done
     case error
-    case end   // сессия закрыта — убрать из индикатора
+    case end   // убрать сессию совсем (внутренний статус; из хуков SessionEnd приходит «idle»)
+    case idle  // сессия не работает, но остаётся в списке на главном экране, пока её не уберёт сам пользователь
 
     /// Чем выше число, тем важнее статус для показа в «чёлке»
     var priority: Int {
@@ -27,6 +28,7 @@ enum AgentStatus: String, Codable {
         case .running: return 2
         case .done: return 1
         case .end: return 0
+        case .idle: return 0
         }
     }
 }
@@ -41,6 +43,7 @@ extension AgentStatus {
         case .done: return Color(red: 0.38, green: 0.84, blue: 0.56)
         case .error: return Color(red: 1.0, green: 0.42, blue: 0.42)
         case .end: return .gray
+        case .idle: return Color.white.opacity(0.4)
         }
     }
 
@@ -51,6 +54,7 @@ extension AgentStatus {
         case .done: return "checkmark"
         case .error: return "exclamationmark"
         case .end: return "circle"
+        case .idle: return "circle"
         }
     }
 
@@ -61,11 +65,12 @@ extension AgentStatus {
         case .done: return "Done"
         case .error: return "Error"
         case .end: return ""
+        case .idle: return "Idle"
         }
     }
 }
 
-struct AgentSession: Identifiable, Equatable {
+struct AgentSession: Identifiable, Equatable, Codable {
     let id: String
     var agent: String
     var status: AgentStatus
@@ -84,6 +89,8 @@ struct AgentSession: Identifiable, Equatable {
     var agentPID: Int?
     /// Лог диалога Claude Code: по нему видно, что ход прервали (Esc), даже если хук Stop не пришёл
     var transcript: String?
+    /// Приложение, в котором идёт сессия (запоминаем, пока процесс известен): по нему переходим и после перезапуска Chelka
+    var hostBundleID: String?
 }
 
 /// Событие, которое «разворачивает» чёлку: агент закончил, упал или ждёт вас
@@ -160,17 +167,25 @@ final class AgentActivityManager: ObservableObject {
 
     private var listener: NWListener?
     private var expiryTasks: [String: Task<Void, Never>] = [:]
+    /// Убранные пользователем сессии: наблюдатели за логами их не возвращают, вернётся только новая активность из хука
+    private var archivedIDs: Set<String> = []
+    private var saveTask: Task<Void, Never>?
+    private static let storeKey = "agentSessions.v1"
+    private static let storedLimit = 12
+
+    private init() { loadStored() }
 
     /// Агент, которого нужно показать: сначала тот, кому нужно внимание, затем самый свежий
     var primary: AgentSession? {
-        sessions.values.max { a, b in
+        // Неактивные сессии в «чёлке» не показываются, они только в списке на главном экране
+        sessions.values.filter { $0.status != .idle }.max { a, b in
             a.status.priority != b.status.priority
                 ? a.status.priority < b.status.priority
                 : a.updatedAt < b.updatedAt
         }
     }
 
-    var count: Int { sessions.count }
+    var count: Int { sessions.values.filter { $0.status != .idle }.count }
 
     /// Список для открытой «чёлки»: сначала те, кому нужно внимание, затем по свежести
     var orderedSessions: [AgentSession] {
@@ -184,12 +199,16 @@ final class AgentActivityManager: ObservableObject {
     /// Событие из внешнего источника внутри приложения (например, наблюдатель за логами Codex)
     func report(id: String, agent: String, status: AgentStatus, task: String?, project: String?, cwd: String?,
                 transcript: String? = nil) {
+        guard !archivedIDs.contains(id) else { return }
         apply(AgentEvent(id: id, agent: agent, status: status, task: task, project: project, cwd: cwd,
                          pids: nil, tty: nil, agentPid: nil, transcript: transcript))
     }
 
     /// Текущее состояние сессии (для наблюдателей за логами)
     func status(of id: String) -> AgentStatus? { sessions[id]?.status }
+
+    /// Идентификатор убран пользователем (наблюдатели его пропускают)
+    func isArchived(_ id: String) -> Bool { archivedIDs.contains(id) }
 
     /// Перейти в приложение и окно, где работает агент (клик по агенту)
     func jump(to sessionID: String) {
@@ -202,7 +221,9 @@ final class AgentActivityManager: ObservableObject {
     func remove(_ id: String) {
         if banner?.sessionID == id { hideBanner() }
         expiryTasks[id]?.cancel()
+        archivedIDs.insert(id)
         withAnimation(.smooth(duration: 0.3)) { _ = sessions.removeValue(forKey: id) }
+        scheduleSave()
     }
 
     // MARK: - Сервер
@@ -264,7 +285,7 @@ final class AgentActivityManager: ObservableObject {
                     // Пока проверяли, могло прийти свежее событие — тогда не трогаем
                     guard let current = self.sessions[id], current.updatedAt <= now,
                           current.status == .running || current.status == .waiting else { continue }
-                    self.apply(AgentEvent(id: id, agent: nil, status: .end, task: nil, project: nil, cwd: nil, pids: nil, tty: nil))
+                    self.apply(AgentEvent(id: id, agent: nil, status: .idle, task: nil, project: nil, cwd: nil, pids: nil, tty: nil))
                 }
             }
         }
@@ -351,7 +372,11 @@ final class AgentActivityManager: ObservableObject {
     private func route(_ request: HTTPRequest) {
         switch request.path {
         case "/agent":
-            if let event = try? JSONDecoder().decode(AgentEvent.self, from: request.body) { apply(event) }
+            if let event = try? JSONDecoder().decode(AgentEvent.self, from: request.body) {
+                // Новая активность из хука возвращает убранную сессию; завершение сессии — нет
+                if event.status != .idle && event.status != .end { archivedIDs.remove(event.id) }
+                apply(event)
+            }
             Self.respond(request.connection, status: "204 No Content")
         case "/permission":
             handlePermission(request)
@@ -465,6 +490,7 @@ final class AgentActivityManager: ObservableObject {
         if event.status == .end {
             if banner?.sessionID == event.id { hideBanner() }
             withAnimation(.smooth(duration: 0.3)) { _ = sessions.removeValue(forKey: event.id) }
+            scheduleSave()
             return
         }
 
@@ -481,9 +507,11 @@ final class AgentActivityManager: ObservableObject {
             tty: event.tty ?? previous?.tty,
             cwd: event.cwd ?? previous?.cwd,
             agentPID: event.agentPid ?? previous?.agentPID,
-            transcript: event.transcript ?? previous?.transcript
+            transcript: event.transcript ?? previous?.transcript,
+            hostBundleID: Self.hostBundleID(from: event.pids) ?? previous?.hostBundleID
         )
         withAnimation(.smooth(duration: 0.3)) { sessions[event.id] = session }
+        scheduleSave()
 
         // Смена статуса: завершение, ошибка или ожидание — разворачиваем чёлку, возобновление работы — сворачиваем
         if previous?.status != event.status {
@@ -497,7 +525,11 @@ final class AgentActivityManager: ObservableObject {
             }
         }
 
-        // Автоудаление: «готово» и «ошибка» гаснут быстро, остальные — если агент давно молчит
+        // Неактивная сессия остаётся в списке без таймера: её убирает только пользователь
+        guard event.status != .idle else { return }
+
+        // «Готово» и «ошибка» через несколько секунд становятся «неактивна», остальные — если агент давно молчит.
+        // Из списка сессия не пропадает: её убирает только пользователь
         let lifetime: Duration
         switch event.status {
         // Запись агента должна жить дольше плашки, иначе плашка исчезнет вместе с ней
@@ -509,7 +541,51 @@ final class AgentActivityManager: ObservableObject {
         expiryTasks[event.id] = Task { [weak self] in
             try? await Task.sleep(for: lifetime)
             guard !Task.isCancelled else { return }
-            withAnimation(.smooth(duration: 0.3)) { _ = self?.sessions.removeValue(forKey: event.id) }
+            self?.settle(event.id)
+        }
+    }
+
+    /// Сессия больше не работает: переводим в «неактивна», запись остаётся
+    private func settle(_ id: String) {
+        guard var session = sessions[id], session.status != .idle else { return }
+        if banner?.sessionID == id { hideBanner() }
+        session.status = .idle
+        session.since = Date()
+        withAnimation(.smooth(duration: 0.3)) { sessions[id] = session }
+        scheduleSave()
+    }
+
+    /// Приложение (bundle id) ближайшего «обычного» процесса в цепочке родителей агента
+    private static func hostBundleID(from pids: [Int]?) -> String? {
+        pids?.compactMap { NSRunningApplication(processIdentifier: pid_t($0)) }
+            .first { $0.activationPolicy == .regular }?.bundleIdentifier
+    }
+
+    // MARK: - Сохранение между запусками
+
+    /// Сессии переживают перезапуск Chelka: возвращаются как «неактивна», дальше их оживляют хуки и наблюдатели
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, let self else { return }
+            // Хранится не больше двенадцати: самые давние неактивные отбрасываются
+            let kept = self.sessions.values.sorted { $0.updatedAt > $1.updatedAt }.prefix(Self.storedLimit)
+            if let data = try? JSONEncoder().encode(Array(kept)) {
+                UserDefaults.standard.set(data, forKey: Self.storeKey)
+            }
+        }
+    }
+
+    private func loadStored() {
+        guard let data = UserDefaults.standard.data(forKey: Self.storeKey),
+              let stored = try? JSONDecoder().decode([AgentSession].self, from: data) else { return }
+        for var session in stored {
+            // После перезапуска неизвестно, работает ли агент; номера процессов устарели (могут принадлежать чужим программам)
+            session.status = .idle
+            session.hostPIDs = []
+            session.agentPID = nil
+            sessions[session.id] = session
         }
     }
 }
@@ -539,6 +615,10 @@ enum AgentJumper {
         if let app, let url = app.bundleURL {
             appURL = url
             bundleID = app.bundleIdentifier ?? ""
+        } else if let remembered = session.hostBundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: remembered) {
+            // Процесс уже неизвестен (после перезапуска), но приложение запомнили
+            appURL = url
+            bundleID = remembered
         } else if let fallback = fallbackBundles[session.agent], let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: fallback) {
             // Процессов нет (например, Codex определён по логам, без хука): открываем приложение агента по имени
             appURL = url

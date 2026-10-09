@@ -28,6 +28,10 @@ status = os.environ["STATUS"]
 if status == "auto":
     status = {"completed": "done", "aborted": "end", "error": "error"}.get(data.get("status"), "done")
 
+# Завершение сессии не убирает её из Chelka: она остаётся в списке как «неактивна», пока пользователь сам её не уберёт
+if status == "end":
+    status = "idle"
+
 # Единый идентификатор сессии и рабочая папка для разных агентов
 sid = data.get("session_id") or data.get("conversation_id") or "session"
 roots = data.get("workspace_roots") or []

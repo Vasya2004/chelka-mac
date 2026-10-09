@@ -42,7 +42,7 @@ struct AgentBadge: View {
                     AgentDoneArt(style: doneStyle, progress: doneProgress, size: size, tint: tint)
                 case .error:
                     AgentBadgeArt.Failed(size: size, tint: tint, wobble: wobble)
-                case .end:
+                case .end, .idle:
                     EmptyView()
                 }
             }
