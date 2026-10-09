@@ -290,6 +290,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         AgentActivityManager.shared.start()
         UsageManager.shared.start()
         CodexActivityWatcher.shared.start()
+        ClaudeActivityWatcher.shared.start()
 
         NotificationCenter.default.addObserver(
             self,

@@ -182,9 +182,14 @@ final class AgentActivityManager: ObservableObject {
     }
 
     /// Событие из внешнего источника внутри приложения (например, наблюдатель за логами Codex)
-    func report(id: String, agent: String, status: AgentStatus, task: String?, project: String?, cwd: String?) {
-        apply(AgentEvent(id: id, agent: agent, status: status, task: task, project: project, cwd: cwd, pids: nil, tty: nil))
+    func report(id: String, agent: String, status: AgentStatus, task: String?, project: String?, cwd: String?,
+                transcript: String? = nil) {
+        apply(AgentEvent(id: id, agent: agent, status: status, task: task, project: project, cwd: cwd,
+                         pids: nil, tty: nil, agentPid: nil, transcript: transcript))
     }
+
+    /// Текущее состояние сессии (для наблюдателей за логами)
+    func status(of id: String) -> AgentStatus? { sessions[id]?.status }
 
     /// Перейти в приложение и окно, где работает агент (клик по агенту)
     func jump(to sessionID: String) {
@@ -273,7 +278,7 @@ final class AgentActivityManager: ObservableObject {
 
     /// Ход Claude Code закончен, если последняя запись диалога — ответ без вызова инструмента
     /// или отметка о прерывании. Пока выполняется инструмент, последняя запись — его вызов (tool_use).
-    nonisolated private static func turnFinished(transcript path: String) -> Bool {
+    nonisolated static func turnFinished(transcript path: String) -> Bool {
         guard let handle = FileHandle(forReadingAtPath: path) else { return false }
         defer { try? handle.close() }
         let size = (try? handle.seekToEnd()) ?? 0
