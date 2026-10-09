@@ -173,6 +173,13 @@ struct ContentView: View {
                     )
                 
                 mainLayout
+                    // Ряд активных сессий на главном экране меняет высоту открытой «чёлки», когда сессия появляется или пропадает
+                    .onChange(of: agentManager.sessions.isEmpty) { _, _ in
+                        withAnimation(.smooth(duration: 0.3)) { vm.refreshOpenHeight() }
+                    }
+                    .onChange(of: Defaults[.showAgentActivity]) { _, _ in
+                        withAnimation(.smooth(duration: 0.3)) { vm.refreshOpenHeight() }
+                    }
                     .frame(height: vm.notchState == .open ? vm.notchSize.height : nil)
                     .conditionalModifier(true) { view in
                         let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)

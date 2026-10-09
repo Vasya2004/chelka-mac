@@ -189,11 +189,27 @@ class BoringViewModel: NSObject, ObservableObject {
         return false
     }
 
+    /// Высота открытой «чёлки»: полоса лимитов и ряд активных сессий делают её чуть выше
+    var openHeight: CGFloat {
+        openNotchSize.height
+            + (Defaults[.showAIUsage] ? usageStripHeight : 0)
+            + (agentChipsVisible ? agentChipsHeight : 0)
+    }
+
+    /// Ряд сессий нейросетей на главном экране показывается, пока есть хотя бы одна сессия
+    var agentChipsVisible: Bool {
+        Defaults[.showAgentActivity] && !AgentActivityManager.shared.sessions.isEmpty
+    }
+
+    /// Пересчитать высоту уже открытой «чёлки» (сессия появилась или исчезла)
+    func refreshOpenHeight() {
+        guard notchState == .open else { return }
+        let height = openHeight
+        if abs(notchSize.height - height) > 0.5 { notchSize.height = height }
+    }
+
     func open() {
-        // Полоса с лимитами ИИ делает открытую «чёлку» чуть выше
-        self.notchSize = CGSize(
-            width: openNotchSize.width,
-            height: openNotchSize.height + (Defaults[.showAIUsage] ? usageStripHeight : 0))
+        self.notchSize = CGSize(width: openNotchSize.width, height: openHeight)
         self.notchState = .open
         
         // Force music information update when notch is opened

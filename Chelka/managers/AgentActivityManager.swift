@@ -516,6 +516,12 @@ final class AgentActivityManager: ObservableObject {
 /// Terminal/iTerm2 — на нужную вкладку по tty, IDE — на окно проекта, остальные — просто активирует приложение.
 @MainActor
 enum AgentJumper {
+    /// Приложение агента по имени — запасной путь, когда цепочка процессов неизвестна
+    private static let fallbackBundles = [
+        "Codex": "com.openai.codex",
+        "Claude Code": "com.anthropic.claudefordesktop",
+        "Cursor": "com.todesktop.230313mzl4w4u92",
+    ]
     private static let ideBundlePrefixes = ["com.microsoft.VSCode", "com.todesktop.", "com.exafunction.windsurf", "dev.zed.", "com.jetbrains."]
 
     static func jump(to session: AgentSession) {
@@ -523,8 +529,18 @@ enum AgentJumper {
         let app = session.hostPIDs
             .compactMap { NSRunningApplication(processIdentifier: pid_t($0)) }
             .first { $0.activationPolicy == .regular }
-        guard let app, let appURL = app.bundleURL else { return }
-        let bundleID = app.bundleIdentifier ?? ""
+        let appURL: URL
+        let bundleID: String
+        if let app, let url = app.bundleURL {
+            appURL = url
+            bundleID = app.bundleIdentifier ?? ""
+        } else if let fallback = fallbackBundles[session.agent], let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: fallback) {
+            // Процессов нет (например, Codex определён по логам, без хука): открываем приложение агента по имени
+            appURL = url
+            bundleID = fallback
+        } else {
+            return
+        }
 
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true

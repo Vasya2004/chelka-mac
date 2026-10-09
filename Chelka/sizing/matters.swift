@@ -16,7 +16,9 @@ let shadowPadding: CGFloat = 20
 let openNotchSize: CGSize = .init(width: 640, height: 190)
 /// Высота полосы с лимитами ИИ внизу главного экрана (добавляется к открытой «чёлке», когда полоса включена)
 let usageStripHeight: CGFloat = 38
-let windowSize: CGSize = .init(width: openNotchSize.width, height: openNotchSize.height + usageStripHeight + shadowPadding)
+/// Высота ряда активных сессий нейросетей на главном экране (добавляется, пока есть хотя бы одна сессия)
+let agentChipsHeight: CGFloat = 30
+let windowSize: CGSize = .init(width: openNotchSize.width, height: openNotchSize.height + usageStripHeight + agentChipsHeight + shadowPadding)
 let cornerRadiusInsets: (opened: (top: CGFloat, bottom: CGFloat), closed: (top: CGFloat, bottom: CGFloat)) = (opened: (top: 19, bottom: 24), closed: (top: 6, bottom: 14))
 
 enum MusicPlayerImageSizes {

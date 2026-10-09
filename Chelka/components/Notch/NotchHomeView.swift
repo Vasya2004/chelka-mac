@@ -442,6 +442,11 @@ struct NotchHomeView: View {
     private var mainContent: some View {
         VStack(spacing: 6) {
             playerAndCalendar
+            if vm.agentChipsVisible {
+                AgentSessionChipsView()
+                    .frame(height: agentChipsHeight - 6)
+                    .transition(.opacity.combined(with: .offset(y: -4)))
+            }
             if Defaults[.showAIUsage] {
                 UsageStripView()
                     .frame(height: usageStripHeight - 6)
