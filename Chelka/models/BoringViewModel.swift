@@ -31,6 +31,10 @@ class BoringViewModel: NSObject, ObservableObject {
     @Published var edgeAutoOpenActive: Bool = false
     @Published var isHoveringCalendar: Bool = false
     @Published var isBatteryPopoverActive: Bool = false
+    /// «Закреплена»: открытую «чёлку» нажали, она остаётся открытой, даже если увести курсор.
+    /// Закрывается следующим нажатием в любом другом месте экрана. Открытая наведением и не нажатая закрывается сама, когда курсор уходит.
+    @Published var isPinnedOpen: Bool = false
+    private var clickMonitors: [Any] = []
 
     @Published var screenUUID: String?
 
@@ -46,6 +50,8 @@ class BoringViewModel: NSObject, ObservableObject {
     }
 
     func destroy() {
+        clickMonitors.forEach { NSEvent.removeMonitor($0) }
+        clickMonitors.removeAll()
         cancellables.forEach { $0.cancel() }
         cancellables.removeAll()
     }
@@ -67,6 +73,30 @@ class BoringViewModel: NSObject, ObservableObject {
             .store(in: &cancellables)
         
         setupDetectorObserver()
+        setupClickMonitors()
+    }
+
+    /// Нажатия мыши: внутри открытой «чёлки» — закрепить, вне её (в любом приложении или в пустой части нашего окна) — закрыть
+    private func setupClickMonitors() {
+        let mask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown]
+        if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
+            self?.handleMouseDown()
+            return event
+        }) { clickMonitors.append(local) }
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
+            self?.handleMouseDown()
+        }) { clickMonitors.append(global) }
+    }
+
+    private func handleMouseDown() {
+        guard notchState == .open else { return }
+        if isMouseHovering() {
+            isPinnedOpen = true
+        } else if isPinnedOpen {
+            // Окно выбора файла, меню «Поделиться» и всплывающее окно батареи не должны закрываться кликом по ним
+            guard !isBatteryPopoverActive, !SharingStateManager.shared.preventNotchClose else { return }
+            withAnimation(animation) { close() }
+        }
     }
     
     private func setupDetectorObserver() {
@@ -210,6 +240,7 @@ class BoringViewModel: NSObject, ObservableObject {
 
     func open() {
         self.notchSize = CGSize(width: openNotchSize.width, height: openHeight)
+        self.isPinnedOpen = false
         self.notchState = .open
         
         // Force music information update when notch is opened
@@ -223,6 +254,7 @@ class BoringViewModel: NSObject, ObservableObject {
         }
         self.notchSize = getClosedNotchSize(screenUUID: self.screenUUID)
         self.closedNotchSize = self.notchSize
+        self.isPinnedOpen = false
         self.notchState = .closed
         self.isBatteryPopoverActive = false
         self.coordinator.sneakPeek.show = false
