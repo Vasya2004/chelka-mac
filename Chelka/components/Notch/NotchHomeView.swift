@@ -442,14 +442,15 @@ struct NotchHomeView: View {
     private var mainContent: some View {
         VStack(spacing: 6) {
             playerAndCalendar
-            if vm.agentChipsVisible {
-                AgentSessionChipsView()
-                    .frame(height: agentChipsHeight - 6)
-                    .transition(.opacity.combined(with: .offset(y: -4)))
-            }
             if Defaults[.showAIUsage] {
                 UsageStripView()
                     .frame(height: usageStripHeight - 6)
+            }
+            // Активные сессии нейросетей — под лимитами, самым нижним рядом
+            if vm.agentChipsVisible {
+                AgentSessionChipsView()
+                    .frame(height: agentChipsHeight - 6)
+                    .transition(.opacity.combined(with: .offset(y: 4)))
             }
         }
         .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .top)), removal: .opacity))
