@@ -12,7 +12,7 @@ import SwiftUI
 /// Строка простоя в закрытой «чёлке»: левая зона, сама чёлка, правая зона
 struct IdleAnimationView: View {
     /// Ширина зоны по бокам от чёлки
-    static let sideWidth: CGFloat = 36
+    static let sideWidth = ClosedNotchLayout.sideWidth
 
     let style: IdleStyle
     let notchWidth: CGFloat

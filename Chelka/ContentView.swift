@@ -95,7 +95,7 @@ struct ContentView: View {
     /// Ширина боковой части строки: при совмещении с музыкой она чуть шире
 /// Ширина боковой зоны при музыке: одна и та же в режимах «только музыка» и «музыка + нейросеть»,
     /// поэтому «чёлка» не меняет ширину, когда появляется агент
-    private let musicSideWidth: CGFloat = 29
+    private let musicSideWidth = ClosedNotchLayout.sideWidth
     @Default(.idleStyle) private var idleStyle
 
     /// Анимация простоя: «чёлка» закрыта, агентов нет (проверяются раньше по цепочке), медиа не играет
@@ -103,7 +103,7 @@ struct ContentView: View {
         idleStyle != .off && !coordinator.expandingView.show && vm.notchState == .closed
             && !musicManager.isPlaying && musicManager.isPlayerIdle && !vm.hideOnClosed
     }
-    private var agentSideWidth: CGFloat { musicLiveActivityShown ? musicSideWidth : AgentActivityView.sideWidth }
+    private var agentSideWidth: CGFloat { ClosedNotchLayout.sideWidth }
 
     private var agentRowWidth: CGFloat {
         let base = vm.closedNotchSize.width + 2 * agentSideWidth
@@ -126,9 +126,9 @@ struct ContentView: View {
             && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle)
             && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed
         {
-            chinWidth += (2 * max(0, vm.effectiveClosedNotchHeight - 12) + 20)
+            chinWidth += 2 * musicSideWidth
         } else if idleAnimationVisible {
-            chinWidth += 2 * IdleAnimationView.sideWidth
+            chinWidth += 2 * ClosedNotchLayout.sideWidth
         }
 
         return chinWidth

@@ -89,6 +89,12 @@ enum DoneStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
     var duration: Double { self == .check ? 0.55 : 1.0 }
 }
 
+/// Размеры закрытой «чёлки»: ширина боковых зон одна для всех состояний (простой, музыка, нейросеть, музыка + нейросеть),
+/// поэтому «чёлка» не меняет ширину при смене состояния
+enum ClosedNotchLayout {
+    static let sideWidth: CGFloat = 42
+}
+
 /// Анимация закрытой «чёлки» в простое: нет ни работающих нейросетей, ни медиа
 enum IdleStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
     case off, cat, pong, fireflies, fish, snake, clock, chomp, matrix, rain, campfire, invaders, dino, blocks, puppy, fireworks, portal, spider

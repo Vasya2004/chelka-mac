@@ -198,7 +198,7 @@ struct AgentActivityView: View {
     @Default(.agentSideStyle) private var sideStyle
     let notchWidth: CGFloat
     let rowWidth: CGFloat
-    static let sideWidth: CGFloat = 50
+    static let sideWidth = ClosedNotchLayout.sideWidth
 
     var body: some View {
         if let session = manager.primary {
@@ -222,8 +222,8 @@ struct AgentActivityView: View {
                         Text(session.status.label)
                             .font(.system(size: 10.5, weight: .medium))
                             .foregroundStyle(tint)
-                            .lineLimit(1)
-                            .fixedSize()   // подпись никогда не переносится на вторую строку
+                            .lineLimit(1)   // подпись не переносится на вторую строку, при нехватке места слегка сжимается
+                            .minimumScaleFactor(0.8)
                             .transition(.opacity.combined(with: .offset(x: -3)))
                     }
                 }
