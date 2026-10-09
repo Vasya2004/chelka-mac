@@ -1038,7 +1038,7 @@ private enum IdlePuppy {
         let ground = h - 4
         let leftX = zones.left.midX - 5
         let rightX = zones.right.midX
-        let cycle = 11.0
+        let cycle = 9.6
         let local = t.truncatingRemainder(dividingBy: cycle)
         let step = Int(t * 8) % 2 == 0
         let wag = Int(t * 6) % 2 == 0
@@ -1047,16 +1047,21 @@ private enum IdlePuppy {
             context.fill(Path(ellipseIn: CGRect(x: x - 2, y: y - 4, width: 4, height: 4)), with: .color(ballColor))
         }
         func lerp(_ a: CGFloat, _ b: CGFloat, _ p: Double) -> CGFloat { a + (b - a) * CGFloat(min(1, max(0, p))) }
+        /// Пробег под чёлкой быстрее, чем у краёв: в середине пути (за чёлкой) скорость в 1,3 раза выше средней, у краёв — в 0,7
+        func run(_ a: CGFloat, _ b: CGFloat, _ p: Double) -> CGFloat {
+            let q = min(1, max(0, p))
+            return a + (b - a) * CGFloat(q - 0.3 * sin(2 * .pi * q) / (2 * .pi))
+        }
 
         // Мяч
         switch local {
-        case ..<1.5, 8.6...:
+        case ..<1.5, 7.0...:
             ball(leftX + 15, ground)
         case ..<3.5:
             let p = (local - 1.5) / 2
             let bounce = abs(sin(p * .pi * 2.5)) * 11 * (1 - p * 0.7)
             ball(lerp(leftX + 15, rightX + 6, p), ground - CGFloat(bounce))
-        case ..<5:
+        case ..<4.2:
             ball(rightX + 6, ground)
         default: break
         }
@@ -1065,15 +1070,15 @@ private enum IdlePuppy {
         switch local {
         case ..<2:
             (wag ? sitA : sitB).draw(in: &context, x: leftX, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
-        case ..<5:
-            let x = lerp(leftX, rightX - 4, (local - 2) / 3)
+        case ..<4.2:
+            let x = run(leftX, rightX - 4, (local - 2) / 2.2)
             (step ? walkA : walkB).draw(in: &context, x: x, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
-        case ..<5.6:
+        case ..<4.8:
             walkA.draw(in: &context, x: rightX - 4, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
             ball(rightX + 8, ground - 6)
-        case ..<8.6:
+        case ..<7.0:
             // Обратно с мячом в зубах
-            let x = lerp(rightX - 4, leftX, (local - 5.6) / 3)
+            let x = run(rightX - 4, leftX, (local - 4.8) / 2.2)
             (step ? walkA : walkB).draw(in: &context, x: x, bottom: ground, pixel: px, color: fur, accent: fur, flip: true, dark: dark)
             ball(x - 12, ground - 6)
         default:
