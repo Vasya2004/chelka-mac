@@ -1026,10 +1026,10 @@ private enum IdlePuppy {
             context.fill(Path(ellipseIn: CGRect(x: x - 2, y: y - 4, width: 4, height: 4)), with: .color(ballColor))
         }
         func lerp(_ a: CGFloat, _ b: CGFloat, _ p: Double) -> CGFloat { a + (b - a) * CGFloat(min(1, max(0, p))) }
-        /// Пробег под чёлкой быстрее, чем у краёв: в середине пути (за чёлкой) скорость в 1,3 раза выше средней, у краёв — в 0,7
+        /// Пробег под чёлкой быстрее, чем у краёв: в середине пути (за чёлкой) скорость в 1,4 раза выше средней, у краёв — в 0,6
         func run(_ a: CGFloat, _ b: CGFloat, _ p: Double) -> CGFloat {
             let q = min(1, max(0, p))
-            return a + (b - a) * CGFloat(q - 0.3 * sin(2 * .pi * q) / (2 * .pi))
+            return a + (b - a) * CGFloat(q - 0.4 * sin(2 * .pi * q) / (2 * .pi))
         }
 
         // Мяч

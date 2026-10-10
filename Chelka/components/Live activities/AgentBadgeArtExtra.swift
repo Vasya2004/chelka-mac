@@ -1004,6 +1004,27 @@ struct MusicVisualizerArt: View {
                     let x = 2.5 + CGFloat(i) * (w - 5) / 4
                     ctx.fill(Path(ellipseIn: CGRect(x: x - 1.9, y: h - 2 - lift - 1.9, width: 3.8, height: 3.8)), with: .color(tint.opacity(0.55 + 0.45 * level(i))))
                 }
+            case .arc:
+                // Полукруглый веер лучей из центра нижней кромки
+                let base = CGPoint(x: w / 2, y: h - 1)
+                let count = 9
+                for i in 0..<count {
+                    let a = Double.pi + Double(i) / Double(count - 1) * Double.pi
+                    let len = 3 + (h - 4) * CGFloat(level(i))
+                    var ray = Path()
+                    ray.move(to: CGPoint(x: base.x + 4 * CGFloat(cos(a)), y: base.y + 4 * CGFloat(sin(a))))
+                    ray.addLine(to: CGPoint(x: base.x + (4 + len) * CGFloat(cos(a)), y: base.y + (4 + len) * CGFloat(sin(a))))
+                    ctx.stroke(ray, with: .color(tint.opacity(0.55 + 0.45 * level(i))), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                }
+            case .notes:
+                guard isPlaying else { break }
+                for k in 0..<3 {
+                    let phase = (t * 0.55 + Double(k) / 3).truncatingRemainder(dividingBy: 1)
+                    let x = 4 + CGFloat(k) * 6 + CGFloat(sin(t * 2.2 + Double(k) * 2)) * 2.2
+                    let y = h - CGFloat(phase) * (h + 2)
+                    ctx.draw(Text(k % 2 == 0 ? "♪" : "♫").font(.system(size: 8 + CGFloat(k % 2), weight: .bold)).foregroundColor(tint.opacity(sin(phase * .pi))),
+                             at: CGPoint(x: x, y: y))
+                }
             case .mirror:
                 let bars = 7
                 for i in 0..<bars {
@@ -1015,5 +1036,391 @@ struct MusicVisualizerArt: View {
             }
         }
         .frame(width: 22, height: 15)
+    }
+}
+
+// MARK: - Ещё варианты: индикаторы, правые стороны, завершение
+
+extension AgentBadgeArt {
+
+    // MARK: Индикатор работы: «Проволочный куб» — вращающийся каркас куба в 3D
+
+    struct RunningCube: View {
+        let t: Double
+        let size: CGFloat
+        let tint: Color
+        var ripple: Double? = nil
+
+        var body: some View {
+            let lw = AgentBadgeArt.lineWidth(size)
+            let ring = size * AgentBadgeArt.ringScale
+            Frame(size: size) {
+                Canvas { ctx, sz in
+                    let c = CGPoint(x: sz.width / 2, y: sz.height / 2)
+                    let half = ring * 0.2
+                    let ay = t * 1.3, ax = t * 0.8
+                    var points: [(CGPoint, Double)] = []
+                    for i in 0..<8 {
+                        var x = (i & 1 == 0 ? -1.0 : 1.0), y = (i & 2 == 0 ? -1.0 : 1.0), z = (i & 4 == 0 ? -1.0 : 1.0)
+                        // поворот вокруг Y, затем вокруг X
+                        let x1 = x * cos(ay) + z * sin(ay), z1 = -x * sin(ay) + z * cos(ay)
+                        let y1 = y * cos(ax) - z1 * sin(ax), z2 = y * sin(ax) + z1 * cos(ax)
+                        x = x1; y = y1; z = z2
+                        points.append((CGPoint(x: c.x + CGFloat(x) * half, y: c.y + CGFloat(y) * half), z))
+                    }
+                    for i in 0..<8 {
+                        for bit in [1, 2, 4] where i & bit == 0 {
+                            let j = i | bit
+                            var edge = Path()
+                            edge.move(to: points[i].0); edge.addLine(to: points[j].0)
+                            let depth = (points[i].1 + points[j].1) / 2
+                            ctx.stroke(edge, with: .color(tint.opacity(0.45 + 0.3 * depth)), lineWidth: lw * 0.75)
+                        }
+                    }
+                    for (p, z) in points {
+                        let r = lw * (0.6 + 0.3 * z)
+                        ctx.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(tint.opacity(0.7 + 0.3 * z)))
+                    }
+                }
+                .frame(width: ring, height: ring)
+                if let p = ripple, p < 1 {
+                    AgentBadgeArt.rippleRing(p, ring: ring, lw: lw, tint: tint, strength: 0.55)
+                }
+            }
+        }
+    }
+
+    // MARK: Индикатор работы: «Плазменный шар» — ядро и мерцающие молнии
+
+    struct RunningPlasma: View {
+        let t: Double
+        let size: CGFloat
+        let tint: Color
+        var ripple: Double? = nil
+
+        var body: some View {
+            let lw = AgentBadgeArt.lineWidth(size)
+            let ring = size * AgentBadgeArt.ringScale
+            let frame = Int(t * 12)
+            Frame(size: size) {
+                Circle().stroke(tint.opacity(0.14), lineWidth: lw * 0.7).frame(width: ring, height: ring)
+                Canvas { ctx, sz in
+                    let c = CGPoint(x: sz.width / 2, y: sz.height / 2)
+                    let outer = ring / 2 - lw
+                    ctx.fill(Path(ellipseIn: CGRect(x: c.x - outer, y: c.y - outer, width: outer * 2, height: outer * 2)),
+                             with: .radialGradient(Gradient(colors: [tint.opacity(0.28), .clear]), center: c, startRadius: 0, endRadius: outer))
+                    for k in 0..<5 {
+                        let base = Double(k) / 5 * 2 * .pi + t * 0.5
+                        var path = Path()
+                        path.move(to: c)
+                        let steps = 5
+                        for s in 1...steps {
+                            let f = Double(s) / Double(steps)
+                            let jitter = (noise(frame * 31 + k * 7 + s) - 0.5) * 0.9 * f
+                            let a = base + jitter
+                            let r = outer * CGFloat(f)
+                            path.addLine(to: CGPoint(x: c.x + r * CGFloat(cos(a)), y: c.y + r * CGFloat(sin(a))))
+                        }
+                        ctx.stroke(path, with: .color(tint.opacity(0.35)), lineWidth: lw * 1.8)
+                        ctx.stroke(path, with: .color(tint), lineWidth: lw * 0.7)
+                    }
+                    let core = lw * 1.5
+                    ctx.fill(Path(ellipseIn: CGRect(x: c.x - core, y: c.y - core, width: core * 2, height: core * 2)), with: .color(.white.opacity(0.95)))
+                }
+                .frame(width: ring, height: ring)
+                if let p = ripple, p < 1 {
+                    AgentBadgeArt.rippleRing(p, ring: ring, lw: lw, tint: tint, strength: 0.55)
+                }
+            }
+        }
+    }
+
+    // MARK: Индикатор работы: «Двоичное кольцо» — по кругу бегут нули и единицы
+
+    struct RunningBinary: View {
+        let t: Double
+        let size: CGFloat
+        let tint: Color
+        var ripple: Double? = nil
+
+        var body: some View {
+            let lw = AgentBadgeArt.lineWidth(size)
+            let ring = size * AgentBadgeArt.ringScale
+            Frame(size: size) {
+                Canvas { ctx, sz in
+                    let c = CGPoint(x: sz.width / 2, y: sz.height / 2)
+                    let radius = ring * 0.34
+                    let count = 9
+                    for i in 0..<count {
+                        let a = Double(i) / Double(count) * 2 * .pi + t * 1.1
+                        // «голова» бежит по кольцу: ближе к ней цифры ярче
+                        let head = (t * 1.1).truncatingRemainder(dividingBy: 2 * .pi)
+                        _ = head
+                        let phase = (Double(i) / Double(count) - t * 0.35).truncatingRemainder(dividingBy: 1)
+                        let bright = 0.25 + 0.75 * (1 - abs((phase < 0 ? phase + 1 : phase) - 0.5) * 2)
+                        let digit = noise(i * 13 + Int(t * 2.2 + Double(i))) > 0.5 ? "1" : "0"
+                        let p = CGPoint(x: c.x + radius * CGFloat(cos(a)), y: c.y + radius * CGFloat(sin(a)))
+                        ctx.draw(Text(digit).font(.system(size: ring * 0.19, weight: .bold, design: .monospaced)).foregroundColor(tint.opacity(bright)), at: p)
+                    }
+                    let pulse = 0.5 + 0.5 * sin(t * 3)
+                    let core = lw * (0.9 + 0.5 * pulse)
+                    ctx.fill(Path(ellipseIn: CGRect(x: c.x - core, y: c.y - core, width: core * 2, height: core * 2)), with: .color(tint.opacity(0.6 + 0.4 * pulse)))
+                }
+                .frame(width: ring, height: ring)
+                if let p = ripple, p < 1 {
+                    AgentBadgeArt.rippleRing(p, ring: ring, lw: lw, tint: tint, strength: 0.55)
+                }
+            }
+        }
+    }
+
+    // MARK: Правая сторона: «Шестерёнки» — две сцепленные шестерни крутятся в разные стороны
+
+    struct Gears: View {
+        let t: Double
+        let tint: Color
+
+        private static func gear(center: CGPoint, radius: CGFloat, teeth: Int, rotation: Double) -> Path {
+            var path = Path()
+            let steps = teeth * 4
+            for i in 0..<steps {
+                let a = rotation + Double(i) / Double(steps) * 2 * .pi
+                // зубец: два шага наружу, два внутрь
+                let r = (i % 4 < 2) ? radius : radius * 0.72
+                let p = CGPoint(x: center.x + r * CGFloat(cos(a)), y: center.y + r * CGFloat(sin(a)))
+                if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+            }
+            path.closeSubpath()
+            return path
+        }
+
+        var body: some View {
+            Canvas { ctx, sz in
+                let big = CGPoint(x: 10, y: sz.height / 2)
+                let small = CGPoint(x: 10 + 7.4 + 4.6 - 1.2, y: sz.height / 2 + 1.5)
+                let speed = t * 1.3
+                // зубцов 8 и 5: передаточное число 8/5 — вращаются в противоположные стороны и не расходятся
+                ctx.fill(Self.gear(center: big, radius: 7.4, teeth: 8, rotation: speed), with: .color(tint.opacity(0.9)))
+                ctx.fill(Self.gear(center: small, radius: 4.8, teeth: 5, rotation: -speed * 8 / 5 + .pi / 5), with: .color(tint.opacity(0.65)))
+                ctx.fill(Path(ellipseIn: CGRect(x: big.x - 2.2, y: big.y - 2.2, width: 4.4, height: 4.4)), with: .color(.black))
+                ctx.fill(Path(ellipseIn: CGRect(x: small.x - 1.4, y: small.y - 1.4, width: 2.8, height: 2.8)), with: .color(.black))
+            }
+            .frame(width: 30, height: 17)
+        }
+    }
+
+    // MARK: Правая сторона: «Размышляет» — облачко мысли с пульсирующими точками, иногда вспыхивает идея
+
+    struct Thinking: View {
+        let t: Double
+        let tint: Color
+
+        var body: some View {
+            Canvas { ctx, sz in
+                let idea = t.truncatingRemainder(dividingBy: 5.5) > 4.3
+                let bobble = CGFloat(sin(t * 2)) * 0.6
+                // хвост из пузырьков мысли
+                for (i, r) in [1.0, 1.7].enumerated() {
+                    let p = CGPoint(x: 4 + CGFloat(i) * 3.2, y: 14 - CGFloat(i) * 2.6)
+                    ctx.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(tint.opacity(0.55)))
+                }
+                // облачко из кругов
+                // Круги сливаются в один контур, чтобы обводка шла только по внешнему краю облачка
+                var cloud = Path()
+                for (cx, cy, r) in [(12.0, 8.0, 4.2), (17.0, 5.6, 4.8), (22.5, 7.4, 4.2), (17.0, 9.6, 4.4)] {
+                    cloud = cloud.union(Path(ellipseIn: CGRect(x: cx - r, y: cy + Double(bobble) - r, width: r * 2, height: r * 2)))
+                }
+                ctx.fill(cloud, with: .color(tint.opacity(idea ? 0.5 : 0.2)))
+                ctx.stroke(cloud, with: .color(tint.opacity(0.8)), lineWidth: 0.8)
+                if idea {
+                    // Вспышка идеи: звёздочка в облаке
+                    let q = CGFloat(sin((t.truncatingRemainder(dividingBy: 5.5) - 4.3) / 1.2 * .pi))
+                    var star = Path()
+                    let c = CGPoint(x: 17, y: 7.6 + bobble)
+                    let r = 4 * q
+                    star.move(to: CGPoint(x: c.x - r, y: c.y)); star.addLine(to: CGPoint(x: c.x + r, y: c.y))
+                    star.move(to: CGPoint(x: c.x, y: c.y - r)); star.addLine(to: CGPoint(x: c.x, y: c.y + r))
+                    ctx.stroke(star, with: .color(.white), lineWidth: 1.4)
+                } else {
+                    for i in 0..<3 {
+                        let pulse = max(0, sin(t * 4 - Double(i) * 0.9))
+                        let r = 1.0 + 0.8 * CGFloat(pulse)
+                        ctx.fill(Path(ellipseIn: CGRect(x: 13 + CGFloat(i) * 4 - r, y: 7.8 + bobble - r, width: r * 2, height: r * 2)),
+                                 with: .color(tint.opacity(0.5 + 0.5 * pulse)))
+                    }
+                }
+            }
+            .frame(width: 30, height: 17)
+        }
+    }
+
+    // MARK: Завершение: «Салют» — галочка и разноцветные искры в стороны
+
+    struct DoneFireworks: View, Animatable {
+        var progress: Double
+        let size: CGFloat
+        let tint: Color
+        var animatableData: Double {
+            get { progress }
+            set { progress = newValue }
+        }
+
+        var body: some View {
+            let ring = size * AgentBadgeArt.ringScale
+            ZStack {
+                AgentBadgeArt.Done(progress: min(1, progress * 1.4), size: size, tint: tint)
+                Frame(size: size) {
+                    Canvas { ctx, sz in
+                        let c = CGPoint(x: sz.width / 2, y: sz.height / 2)
+                        let colors: [Color] = [.pink, .yellow, .cyan, .orange, .green, .purple]
+                        let p = CGFloat(progress)
+                        for i in 0..<18 {
+                            let a = Double(i) / 18 * 2 * .pi + noise(i) * 0.3
+                            let speed = 0.5 + noise(i + 40) * 0.5
+                            let r = ring * 0.3 + p * ring * 0.55 * CGFloat(speed)
+                            let point = CGPoint(x: c.x + r * CGFloat(cos(a)), y: c.y + r * CGFloat(sin(a)) + p * p * ring * 0.1)
+                            let d = size * 0.045 * (1 - p * 0.6)
+                            ctx.fill(Path(ellipseIn: CGRect(x: point.x - d, y: point.y - d, width: d * 2, height: d * 2)),
+                                     with: .color(colors[i % colors.count].opacity(Double(1 - p))))
+                        }
+                    }
+                    .frame(width: size * AgentBadgeArt.reach, height: size * AgentBadgeArt.reach)
+                }
+            }
+        }
+    }
+
+    // MARK: Завершение: «Медаль» — медаль на ленте падает сверху, отскакивает и блестит
+
+    struct DoneMedal: View, Animatable {
+        var progress: Double
+        let size: CGFloat
+        let tint: Color
+        var animatableData: Double {
+            get { progress }
+            set { progress = newValue }
+        }
+
+        var body: some View {
+            let ring = size * AgentBadgeArt.ringScale
+            Frame(size: size) {
+                Canvas { ctx, sz in
+                    let c = CGPoint(x: sz.width / 2, y: sz.height / 2)
+                    let u = size * 0.075
+                    // падение с отскоком: 0 → 1 с перелётом, потом затухающее колебание
+                    let drop = min(1, progress / 0.5)
+                    let eased = 1 - pow(1 - drop, 3)
+                    let bounce = progress > 0.5 ? CGFloat(sin((progress - 0.5) * 18) * exp(-(progress - 0.5) * 7)) * 0.9 : 0
+                    let offsetY = -(1 - CGFloat(eased)) * ring * 0.7 + bounce * u
+                    let gold = Color(red: 1, green: 0.82, blue: 0.2)
+                    var layer = ctx
+                    layer.translateBy(x: c.x, y: c.y + offsetY + u)
+                    // лента
+                    for side in [-1.0, 1.0] {
+                        layer.fill(Path { p in
+                            p.move(to: CGPoint(x: CGFloat(side) * u * 0.4, y: -u * 5.5))
+                            p.addLine(to: CGPoint(x: CGFloat(side) * u * 3.4, y: -u * 5.5))
+                            p.addLine(to: CGPoint(x: CGFloat(side) * u * 1.6, y: -u * 0.5)); p.addLine(to: CGPoint(x: CGFloat(side) * u * -0.4, y: -u * 0.5)); p.closeSubpath()
+                        }, with: .color(side < 0 ? Color(red: 0.9, green: 0.25, blue: 0.3) : Color(red: 0.25, green: 0.5, blue: 0.95)))
+                    }
+                    // медаль со звездой
+                    layer.fill(Path(ellipseIn: CGRect(x: -u * 3, y: -u * 0.6, width: u * 6, height: u * 6)), with: .color(gold))
+                    layer.stroke(Path(ellipseIn: CGRect(x: -u * 2.3, y: u * 0.1, width: u * 4.6, height: u * 4.6)), with: .color(Color(red: 0.85, green: 0.6, blue: 0.1)), lineWidth: u * 0.5)
+                    var star = Path()
+                    for k in 0..<10 {
+                        let a = Double(k) / 10 * 2 * .pi - .pi / 2
+                        let r = k % 2 == 0 ? u * 1.7 : u * 0.7
+                        let point = CGPoint(x: CGFloat(cos(a)) * r, y: u * 2.4 + CGFloat(sin(a)) * r)
+                        if k == 0 { star.move(to: point) } else { star.addLine(to: point) }
+                    }
+                    star.closeSubpath()
+                    layer.fill(star, with: .color(Color(red: 0.95, green: 0.7, blue: 0.1)))
+                    // блик пробегает по медали
+                    if progress > 0.6 {
+                        let q = CGFloat((progress - 0.6) / 0.4)
+                        layer.fill(Path(ellipseIn: CGRect(x: -u * 3 + q * u * 5.4 - u * 0.5, y: u * 0.4, width: u * 1.1, height: u * 2.6)), with: .color(.white.opacity(0.7 * Double(sin(q * .pi)))))
+                    }
+                }
+                .frame(width: ring, height: ring)
+            }
+        }
+    }
+}
+
+// MARK: - Ещё обложки
+
+/// «Пластинка в конверте»: обложка — это конверт, из которого выглядывает вращающаяся виниловая пластинка
+struct VinylSleeveCover: View {
+    let image: NSImage
+    let size: CGFloat
+    let isPlaying: Bool
+
+    var body: some View {
+        let outer = size + 7
+        TimelineView(.animation(paused: !isPlaying)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let slide = isPlaying ? 1.0 : 0.3
+            ZStack {
+                // Пластинка за конвертом
+                Canvas { ctx, sz in
+                    let c = CGPoint(x: sz.width / 2 + sz.width * 0.16 * slide, y: sz.height / 2)
+                    let r = sz.width * 0.34
+                    ctx.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(Color(white: 0.08)))
+                    for k in 1...3 {
+                        let g = r * (0.45 + 0.17 * CGFloat(k))
+                        ctx.stroke(Path(ellipseIn: CGRect(x: c.x - g, y: c.y - g, width: g * 2, height: g * 2)), with: .color(.white.opacity(0.08)), lineWidth: 0.5)
+                    }
+                    let a = t * 6
+                    var shine = Path()
+                    shine.addArc(center: c, radius: r * 0.85, startAngle: .radians(a), endAngle: .radians(a + 0.7), clockwise: false)
+                    ctx.stroke(shine, with: .color(.white.opacity(0.4)), lineWidth: 1)
+                    ctx.fill(Path(ellipseIn: CGRect(x: c.x - r * 0.28, y: c.y - r * 0.28, width: r * 0.56, height: r * 0.56)), with: .color(Color(red: 0.95, green: 0.35, blue: 0.4)))
+                    ctx.fill(Path(ellipseIn: CGRect(x: c.x - 0.8, y: c.y - 0.8, width: 1.6, height: 1.6)), with: .color(.black))
+                }
+                .frame(width: outer, height: outer)
+                // Конверт с обложкой
+                Image(nsImage: image)
+                    .resizable().scaledToFill()
+                    .frame(width: outer * 0.64, height: outer * 0.64)
+                    .clipShape(RoundedRectangle(cornerRadius: 2.5, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 2.5, style: .continuous).stroke(Color.white.opacity(0.35), lineWidth: 0.8))
+                    .offset(x: -outer * 0.18)
+            }
+            .frame(width: outer, height: outer)
+        }
+    }
+}
+
+/// «Полароид»: обложка на белой рамке снимка, слегка покачивается
+struct PolaroidCover: View {
+    let image: NSImage
+    let size: CGFloat
+    let isPlaying: Bool
+
+    var body: some View {
+        let outer = size + 7
+        TimelineView(.animation(paused: !isPlaying)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let tilt = isPlaying ? sin(t * 1.6) * 5 : -3
+            ZStack {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(Color(white: 0.96))
+                    .frame(width: outer * 0.78, height: outer * 0.88)
+                    .shadow(color: .black.opacity(0.4), radius: 1.5, y: 1)
+                Image(nsImage: image)
+                    .resizable().scaledToFill()
+                    .frame(width: outer * 0.64, height: outer * 0.64)
+                    .clipped()
+                    .offset(y: -outer * 0.07)
+                // Кусочек скотча
+                Rectangle()
+                    .fill(Color(red: 1, green: 0.9, blue: 0.5).opacity(0.75))
+                    .frame(width: outer * 0.3, height: outer * 0.1)
+                    .rotationEffect(.degrees(-8))
+                    .offset(y: -outer * 0.45)
+            }
+            .rotationEffect(.degrees(tilt))
+            .frame(width: outer, height: outer)
+        }
     }
 }

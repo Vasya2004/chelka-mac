@@ -46,51 +46,52 @@ extension Notification.Name {
 
 /// Индикатор работы агента (кольцо справа от музыки или слева, если музыки нет)
 enum AgentRunningStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case comet, pulse, orbit, aurora, galaxy, atom, neural, helix, pixel
+    case comet, pulse, orbit, aurora, galaxy, atom, neural, helix, pixel, cube, plasma, binary
     var id: String { rawValue }
     var title: String {
         switch self {
         case .comet: return "Comet"; case .pulse: return "Pulse"; case .orbit: return "Orbit"
         case .aurora: return "Aurora"; case .galaxy: return "Galaxy"
         case .atom: return "Atom"; case .neural: return "Neural net"; case .helix: return "DNA helix"; case .pixel: return "Pixel loader"
+        case .cube: return "Wire cube"; case .plasma: return "Plasma orb"; case .binary: return "Binary ring"
         }
     }
 }
 
 /// Что показывать справа, когда активна только нейросеть (без музыки)
 enum AgentSideStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case timer, equalizer, dots, wave, rain, shimmer, code, runner, sparkles
+    case timer, equalizer, dots, wave, rain, shimmer, code, runner, sparkles, gears, thought
     var id: String { rawValue }
     var title: String {
         switch self {
         case .timer: return "Timer"; case .equalizer: return "Equalizer"; case .dots: return "Typing dots"
         case .wave: return "Wave"; case .rain: return "Rain"; case .shimmer: return "Shimmer"
-        case .code: return "Typing code"; case .runner: return "Pixel runner"; case .sparkles: return "Sparkles"
+        case .code: return "Typing code"; case .runner: return "Pixel runner"; case .sparkles: return "Sparkles"; case .gears: return "Gears"; case .thought: return "Thinking"
         }
     }
 }
 
 /// Вид обложки альбома в закрытой «чёлке»
 enum CoverStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case disc, rounded, glow, beat, radial, rainbow, cassette, neon, pixelart
+    case disc, rounded, glow, beat, radial, rainbow, cassette, neon, pixelart, vinyl, polaroid
     var id: String { rawValue }
     var title: String {
         switch self {
         case .disc: return "Spinning disc"; case .rounded: return "Square cover"; case .glow: return "Glowing cover"
         case .beat: return "Beat"; case .radial: return "Radial bars"; case .rainbow: return "Rainbow disc"
-        case .cassette: return "Cassette"; case .neon: return "Neon frame"; case .pixelart: return "Pixel art"
+        case .cassette: return "Cassette"; case .neon: return "Neon frame"; case .pixelart: return "Pixel art"; case .vinyl: return "Vinyl sleeve"; case .polaroid: return "Polaroid"
         }
     }
 }
 
 /// Эффект, когда агент закончил работу
 enum DoneStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case check, confetti, starburst, rocket, shockwave, trophy
+    case check, confetti, starburst, rocket, shockwave, trophy, fireworks, medal
     var id: String { rawValue }
     var title: String {
         switch self {
         case .check: return "Check"; case .confetti: return "Confetti"; case .starburst: return "Starburst"
-        case .rocket: return "Rocket"; case .shockwave: return "Shockwave"; case .trophy: return "Trophy"
+        case .rocket: return "Rocket"; case .shockwave: return "Shockwave"; case .trophy: return "Trophy"; case .fireworks: return "Fireworks"; case .medal: return "Medal"
         }
     }
     /// Сколько длится анимация завершения
@@ -99,12 +100,13 @@ enum DoneStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
 
 /// Визуализатор справа от «чёлки», пока играет музыка (когда включён «Show music visualizer»)
 enum MusicVisualStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case classic, pixelBars, wave, rings, dots, mirror
+    case classic, pixelBars, wave, rings, dots, mirror, arc, notes
     var id: String { rawValue }
     var title: String {
         switch self {
         case .classic: return "Classic spectrum"; case .pixelBars: return "LED bars"; case .wave: return "Sound wave"
         case .rings: return "Pulse rings"; case .dots: return "Bouncing dots"; case .mirror: return "Mirror bars"
+        case .arc: return "Radial arc"; case .notes: return "Floating notes"
         }
     }
 }

@@ -165,6 +165,10 @@ struct AlbumCover: View {
             NeonCover(image: image, size: size, isPlaying: isPlaying)
         case .pixelart:
             PixelArtCover(image: image, size: size, isPlaying: isPlaying)
+        case .vinyl:
+            VinylSleeveCover(image: image, size: size, isPlaying: isPlaying)
+        case .polaroid:
+            PolaroidCover(image: image, size: size, isPlaying: isPlaying)
         }
     }
 }
@@ -275,6 +279,9 @@ struct AgentRunningArt: View {
         case .neural: AgentBadgeArt.RunningNeural(t: t, size: size, tint: tint, ripple: ripple)
         case .helix: AgentBadgeArt.RunningHelix(t: t, size: size, tint: tint, ripple: ripple)
         case .pixel: AgentBadgeArt.RunningPixel(t: t, size: size, tint: tint, ripple: ripple)
+        case .cube: AgentBadgeArt.RunningCube(t: t, size: size, tint: tint, ripple: ripple)
+        case .plasma: AgentBadgeArt.RunningPlasma(t: t, size: size, tint: tint, ripple: ripple)
+        case .binary: AgentBadgeArt.RunningBinary(t: t, size: size, tint: tint, ripple: ripple)
         }
     }
 }
@@ -294,6 +301,8 @@ struct AgentDoneArt: View {
         case .rocket: AgentBadgeArt.DoneRocket(progress: progress, size: size, tint: tint)
         case .shockwave: AgentBadgeArt.DoneShockwave(progress: progress, size: size, tint: tint)
         case .trophy: AgentBadgeArt.DoneTrophy(progress: progress, size: size, tint: tint)
+        case .fireworks: AgentBadgeArt.DoneFireworks(progress: progress, size: size, tint: tint)
+        case .medal: AgentBadgeArt.DoneMedal(progress: progress, size: size, tint: tint)
         }
     }
 }
@@ -325,6 +334,10 @@ struct AgentSideContent: View {
             TimelineView(.animation) { AgentBadgeArt.PixelRunner(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
         case .sparkles:
             TimelineView(.animation) { AgentBadgeArt.Sparkles(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
+        case .gears:
+            TimelineView(.animation) { AgentBadgeArt.Gears(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
+        case .thought:
+            TimelineView(.animation) { AgentBadgeArt.Thinking(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
         }
     }
 }
