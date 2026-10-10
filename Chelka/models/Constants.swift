@@ -46,47 +46,67 @@ extension Notification.Name {
 
 /// Индикатор работы агента (кольцо справа от музыки или слева, если музыки нет)
 enum AgentRunningStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case comet, pulse, orbit, aurora, galaxy
+    case comet, pulse, orbit, aurora, galaxy, atom, neural, helix, pixel
     var id: String { rawValue }
     var title: String {
         switch self {
         case .comet: return "Comet"; case .pulse: return "Pulse"; case .orbit: return "Orbit"
         case .aurora: return "Aurora"; case .galaxy: return "Galaxy"
+        case .atom: return "Atom"; case .neural: return "Neural net"; case .helix: return "DNA helix"; case .pixel: return "Pixel loader"
         }
     }
 }
 
 /// Что показывать справа, когда активна только нейросеть (без музыки)
 enum AgentSideStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case timer, equalizer, dots, wave, rain, shimmer
+    case timer, equalizer, dots, wave, rain, shimmer, code, runner, sparkles
     var id: String { rawValue }
     var title: String {
         switch self {
         case .timer: return "Timer"; case .equalizer: return "Equalizer"; case .dots: return "Typing dots"
         case .wave: return "Wave"; case .rain: return "Rain"; case .shimmer: return "Shimmer"
+        case .code: return "Typing code"; case .runner: return "Pixel runner"; case .sparkles: return "Sparkles"
         }
     }
 }
 
 /// Вид обложки альбома в закрытой «чёлке»
 enum CoverStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case disc, rounded, glow, beat, radial, rainbow
+    case disc, rounded, glow, beat, radial, rainbow, cassette, neon, pixelart
     var id: String { rawValue }
     var title: String {
         switch self {
         case .disc: return "Spinning disc"; case .rounded: return "Square cover"; case .glow: return "Glowing cover"
         case .beat: return "Beat"; case .radial: return "Radial bars"; case .rainbow: return "Rainbow disc"
+        case .cassette: return "Cassette"; case .neon: return "Neon frame"; case .pixelart: return "Pixel art"
         }
     }
 }
 
 /// Эффект, когда агент закончил работу
 enum DoneStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case check, confetti, starburst
+    case check, confetti, starburst, rocket, shockwave, trophy
     var id: String { rawValue }
-    var title: String { switch self { case .check: return "Check"; case .confetti: return "Confetti"; case .starburst: return "Starburst" } }
+    var title: String {
+        switch self {
+        case .check: return "Check"; case .confetti: return "Confetti"; case .starburst: return "Starburst"
+        case .rocket: return "Rocket"; case .shockwave: return "Shockwave"; case .trophy: return "Trophy"
+        }
+    }
     /// Сколько длится анимация завершения
     var duration: Double { self == .check ? 0.55 : 1.0 }
+}
+
+/// Визуализатор справа от «чёлки», пока играет музыка (когда включён «Show music visualizer»)
+enum MusicVisualStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
+    case classic, pixelBars, wave, rings, dots, mirror
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .classic: return "Classic spectrum"; case .pixelBars: return "LED bars"; case .wave: return "Sound wave"
+        case .rings: return "Pulse rings"; case .dots: return "Bouncing dots"; case .mirror: return "Mirror bars"
+        }
+    }
 }
 
 /// Размеры закрытой «чёлки»: ширина боковых зон одна для всех состояний (простой, музыка, нейросеть, музыка + нейросеть),
@@ -204,6 +224,7 @@ extension Defaults.Keys {
     static let coverStyle = Key<CoverStyle>("coverStyle", default: .disc)
     static let doneStyle = Key<DoneStyle>("doneStyle", default: .check)
     static let idleStyle = Key<IdleStyle>("idleStyle", default: .cat)
+    static let musicVisualStyle = Key<MusicVisualStyle>("musicVisualStyle", default: .classic)
     static let playLockSound = Key<Bool>("playLockSound", default: true)
     static let hideFromScreenRecording = Key<Bool>("hideFromScreenRecording", default: false)
     

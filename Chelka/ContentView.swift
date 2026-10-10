@@ -35,6 +35,7 @@ struct ContentView: View {
     @Namespace var albumArtNamespace
 
     @Default(.useMusicVisualizer) var useMusicVisualizer
+    @Default(.musicVisualStyle) var musicVisualStyle
 
 
     // Shared interactive spring for movement/resizing to avoid conflicting animations
@@ -570,7 +571,14 @@ struct ContentView: View {
                 )
 
             HStack {
-                if useMusicVisualizer {
+                if useMusicVisualizer && musicVisualStyle != .classic {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !musicManager.isPlaying)) { timeline in
+                        MusicVisualizerArt(
+                            style: musicVisualStyle, t: timeline.date.timeIntervalSinceReferenceDate,
+                            isPlaying: musicManager.isPlaying,
+                            tint: Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.gray)
+                    }
+                } else if useMusicVisualizer {
                     Rectangle()
                         .fill(
                             Defaults[.coloredSpectrogram]

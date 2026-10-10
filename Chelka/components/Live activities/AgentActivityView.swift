@@ -159,6 +159,12 @@ struct AlbumCover: View {
             RadialCover(image: image, size: size, isPlaying: isPlaying)
         case .rainbow:
             RainbowDisc(image: image, size: size, isPlaying: isPlaying)
+        case .cassette:
+            CassetteCover(image: image, size: size, isPlaying: isPlaying)
+        case .neon:
+            NeonCover(image: image, size: size, isPlaying: isPlaying)
+        case .pixelart:
+            PixelArtCover(image: image, size: size, isPlaying: isPlaying)
         }
     }
 }
@@ -265,6 +271,10 @@ struct AgentRunningArt: View {
         case .orbit: AgentBadgeArt.RunningOrbit(t: t, size: size, tint: tint, ripple: ripple)
         case .aurora: AgentBadgeArt.RunningAurora(t: t, size: size, tint: tint, ripple: ripple)
         case .galaxy: AgentBadgeArt.RunningGalaxy(t: t, size: size, tint: tint, ripple: ripple)
+        case .atom: AgentBadgeArt.RunningAtom(t: t, size: size, tint: tint, ripple: ripple)
+        case .neural: AgentBadgeArt.RunningNeural(t: t, size: size, tint: tint, ripple: ripple)
+        case .helix: AgentBadgeArt.RunningHelix(t: t, size: size, tint: tint, ripple: ripple)
+        case .pixel: AgentBadgeArt.RunningPixel(t: t, size: size, tint: tint, ripple: ripple)
         }
     }
 }
@@ -281,6 +291,9 @@ struct AgentDoneArt: View {
         case .check: AgentBadgeArt.Done(progress: progress, size: size, tint: tint)
         case .confetti: AgentBadgeArt.DoneConfetti(progress: progress, size: size, tint: tint)
         case .starburst: AgentBadgeArt.DoneStarburst(progress: progress, size: size, tint: tint)
+        case .rocket: AgentBadgeArt.DoneRocket(progress: progress, size: size, tint: tint)
+        case .shockwave: AgentBadgeArt.DoneShockwave(progress: progress, size: size, tint: tint)
+        case .trophy: AgentBadgeArt.DoneTrophy(progress: progress, size: size, tint: tint)
         }
     }
 }
@@ -306,6 +319,12 @@ struct AgentSideContent: View {
             TimelineView(.animation) { AgentBadgeArt.Rain(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
         case .shimmer:
             TimelineView(.animation) { AgentBadgeArt.Shimmer(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
+        case .code:
+            TimelineView(.animation) { AgentBadgeArt.TypingCode(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
+        case .runner:
+            TimelineView(.animation) { AgentBadgeArt.PixelRunner(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
+        case .sparkles:
+            TimelineView(.animation) { AgentBadgeArt.Sparkles(t: $0.date.timeIntervalSinceReferenceDate, tint: tint) }
         }
     }
 }

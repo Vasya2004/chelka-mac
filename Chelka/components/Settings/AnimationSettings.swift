@@ -15,6 +15,7 @@ struct AnimationSettings: View {
     @Default(.coverStyle) private var coverStyle
     @Default(.doneStyle) private var doneStyle
     @Default(.idleStyle) private var idleStyle
+    @Default(.musicVisualStyle) private var musicVisual
     @ObservedObject private var music = MusicManager.shared
     /// Момент «начала работы» для превью таймера
     @State private var previewStart = Date().addingTimeInterval(-74)
@@ -112,6 +113,24 @@ struct AnimationSettings: View {
 
             Section {
                 LazyVGrid(columns: columns, spacing: 14) {
+                    ForEach(MusicVisualStyle.allCases) { style in
+                        StyleCard(title: style.title, selected: musicVisual == style, action: { musicVisual = style }) {
+                            TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+                                MusicVisualizerArt(style: style, t: timeline.date.timeIntervalSinceReferenceDate, isPlaying: true, tint: white)
+                                    .scaleEffect(1.6)
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Music visualizer")
+            } footer: {
+                Text("Shown to the right of the notch while music plays (needs “Show music visualizer” in Media settings). Classic uses the real audio spectrum.")
+            }
+
+            Section {
+                LazyVGrid(columns: columns, spacing: 14) {
                     ForEach(IdleStyle.allCases) { style in
                         StyleCard(title: style.title, selected: idleStyle == style, action: { idleStyle = style }) {
                             if style == .off {
@@ -146,6 +165,7 @@ struct AnimationSettings: View {
                     coverStyle = .disc
                     doneStyle = .check
                     idleStyle = .cat
+                    musicVisual = .classic
                 }
             }
         }
