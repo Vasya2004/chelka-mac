@@ -103,8 +103,51 @@ struct AgentBanner: Identifiable, Equatable {
     let status: AgentStatus
 }
 
-/// Запрос разрешения от агента: ждёт ответа пользователя в «чёлке»
+/// Произвольный JSON: нужен, чтобы вернуть агенту его же «предложения по правилам» без потерь
+indirect enum JSONValue: Codable, Equatable {
+    case null, bool(Bool), number(Double), string(String), array([JSONValue]), object([String: JSONValue])
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { self = .null }
+        else if let v = try? c.decode(Bool.self) { self = .bool(v) }
+        else if let v = try? c.decode(Double.self) { self = .number(v) }
+        else if let v = try? c.decode(String.self) { self = .string(v) }
+        else if let v = try? c.decode([JSONValue].self) { self = .array(v) }
+        else { self = .object(try c.decode([String: JSONValue].self)) }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .null: try c.encodeNil()
+        case .bool(let v): try c.encode(v)
+        case .number(let v): try c.encode(v)
+        case .string(let v): try c.encode(v)
+        case .array(let v): try c.encode(v)
+        case .object(let v): try c.encode(v)
+        }
+    }
+}
+
+/// Вариант ответа на вопрос агента
+struct AgentQuestionOption: Decodable, Equatable {
+    var label: String
+    var description: String?
+}
+
+/// Вопрос агента с вариантами ответа (инструмент AskUserQuestion в Claude Code)
+struct AgentQuestion: Decodable, Equatable {
+    var question: String
+    var header: String?
+    var options: [AgentQuestionOption]
+    var multiSelect: Bool?
+}
+
+/// Запрос к пользователю от агента: ждёт ответа в «чёлке»
 struct AgentPermissionRequest: Identifiable, Equatable {
+    enum Kind: Equatable { case tool, question, plan }
+
     let id = UUID()
     let sessionID: String
     let agent: String
@@ -112,6 +155,15 @@ struct AgentPermissionRequest: Identifiable, Equatable {
     let tool: String
     let detail: String
     let createdAt = Date()
+    var kind: Kind = .tool
+    /// Вопросы с вариантами (kind == .question)
+    var questions: [AgentQuestion] = []
+    /// Текст плана на утверждение (kind == .plan)
+    var plan: String = ""
+    /// Правила «всегда разрешать», которые предложил сам агент; вернём их в ответе, если нажмут «Всегда»
+    var suggestions: [JSONValue] = []
+    /// Короткое описание такого правила для подсказки на кнопке
+    var suggestionText: String?
 }
 
 /// Тело запроса /permission: {"id":"session","agent":"Claude Code","project":"...","tool":"Bash","detail":"rm -rf x"}
@@ -124,6 +176,12 @@ private struct PermissionPayload: Decodable {
     var cwd: String?
     var pids: [Int]?
     var tty: String?
+    /// "tool" (по умолчанию), "question" или "plan"
+    var kind: String?
+    var questions: [AgentQuestion]?
+    var plan: String?
+    var suggestions: [JSONValue]?
+    var suggestionText: String?
 }
 
 /// Разобранный HTTP-запрос вместе с соединением (для отложенного ответа)
@@ -400,9 +458,26 @@ final class AgentActivityManager: ObservableObject {
             return
         }
 
-        let permission = AgentPermissionRequest(
+        var permission = AgentPermissionRequest(
             sessionID: payload.id, agent: payload.agent ?? "Agent", project: payload.project,
             tool: payload.tool, detail: payload.detail ?? "")
+        switch payload.kind {
+        case "question":
+            let questions = (payload.questions ?? []).filter { !$0.options.isEmpty }
+            // Вопрос без вариантов в «чёлке» не ответить — отдаём терминалу
+            guard !questions.isEmpty else {
+                Self.respond(request.connection, status: "204 No Content")
+                return
+            }
+            permission.kind = .question
+            permission.questions = questions
+        case "plan":
+            permission.kind = .plan
+            permission.plan = payload.plan ?? ""
+        default:
+            permission.suggestions = payload.suggestions ?? []
+            permission.suggestionText = payload.suggestionText
+        }
         permissionConnections[permission.id] = request.connection
         withAnimation(.spring(response: 0.5, dampingFraction: 0.78)) { pendingPermissions.append(permission) }
 
@@ -420,15 +495,46 @@ final class AgentActivityManager: ObservableObject {
         }
     }
 
-    /// Ответ пользователя из «чёлки»
-    func resolve(_ id: UUID, allow: Bool) {
+    /// Ответ пользователя из «чёлки»: разрешить, отклонить или (always) разрешить и запомнить правило
+    func resolve(_ id: UUID, allow: Bool, always: Bool = false, denyMessage: String = "Denied from Chelka") {
         guard let permission = pendingPermissions.first(where: { $0.id == id }) else { return }
-        if let connection = permissionConnections[id] {
-            let body = allow
-                ? "{\"behavior\":\"allow\"}"
-                : "{\"behavior\":\"deny\",\"message\":\"Denied from Chelka\"}"
-            Self.respond(connection, status: "200 OK", body: body)
+        var body: [String: Any]
+        if allow {
+            body = ["behavior": "allow"]
+            if always, !permission.suggestions.isEmpty,
+               let data = try? JSONEncoder().encode(permission.suggestions),
+               let rules = try? JSONSerialization.jsonObject(with: data) {
+                body["updatedPermissions"] = rules
+            }
+        } else {
+            body = ["behavior": "deny", "message": denyMessage]
         }
+        send(id, body: body)
+        concludeRequest(permission)
+    }
+
+    /// Ответы на вопросы агента: словарь «текст вопроса → выбранный вариант» (несколько вариантов через запятую)
+    func answer(_ id: UUID, answers: [String: String]) {
+        guard let permission = pendingPermissions.first(where: { $0.id == id }) else { return }
+        send(id, body: ["answers": answers])
+        concludeRequest(permission)
+    }
+
+    /// Ответить на вопрос в терминале: хук ничего не вернёт, агент спросит там, где работает
+    func deferToTerminal(_ id: UUID) {
+        guard pendingPermissions.contains(where: { $0.id == id }), let connection = permissionConnections[id] else { return }
+        Self.respond(connection, status: "204 No Content")
+        finishPermission(id)
+    }
+
+    private func send(_ id: UUID, body: [String: Any]) {
+        guard let connection = permissionConnections[id] else { return }
+        let data = (try? JSONSerialization.data(withJSONObject: body)) ?? Data("{}".utf8)
+        Self.respond(connection, status: "200 OK", body: String(decoding: data, as: UTF8.self))
+    }
+
+    private func concludeRequest(_ permission: AgentPermissionRequest) {
+        let id = permission.id
         finishPermission(id)
         // Агент продолжает работу (или остановился после отказа — это покажут следующие события хуков)
         if var session = sessions[permission.sessionID] {

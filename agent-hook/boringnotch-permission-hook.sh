@@ -33,6 +33,25 @@ elif inp.get("description"):
     detail = inp["description"]
 else:
     detail = json.dumps(inp, ensure_ascii=False)
+# Правила «всегда разрешать», которые предлагает сам Claude Code: вернём их в ответе, если нажмут «Always»
+suggestions = data.get("permission_suggestions") or []
+suggestion_text = None
+for entry in suggestions:
+    if entry.get("type") == "addRules":
+        parts = []
+        for rule in entry.get("rules") or []:
+            name = rule.get("toolName") or ""
+            content = rule.get("ruleContent")
+            parts.append(f"{name}({content})" if content else name)
+        if parts:
+            suggestion_text = ", ".join(parts)[:120]
+            break
+    elif entry.get("type") == "setMode":
+        suggestion_text = f"mode: {entry.get('mode')}"
+        break
+    elif entry.get("type") == "addDirectories":
+        suggestion_text = "directory: " + ", ".join(entry.get("directories") or [])[:100]
+        break
 host = host_info("Claude Code")
 print(json.dumps({
     "id": data.get("session_id") or "claude-code",
@@ -43,6 +62,8 @@ print(json.dumps({
     "cwd": data.get("cwd"),
     "pids": host["pids"],
     "tty": host["tty"],
+    "suggestions": suggestions,
+    "suggestionText": suggestion_text,
 }, ensure_ascii=False))
 PY
 )"

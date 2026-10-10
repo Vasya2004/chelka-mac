@@ -437,6 +437,8 @@ struct AgentBannerView: View {
 // MARK: - Запрос разрешения
 
 /// Карточка «Разрешить / Отклонить» для запроса агента
+/// Карточка запроса агента в «чёлке»: разрешение на действие («Разрешить / Всегда / Отклонить»),
+/// вопрос с вариантами ответа или план на утверждение
 struct AgentPermissionView: View {
     let request: AgentPermissionRequest
     var extraCount: Int = 0
@@ -445,36 +447,99 @@ struct AgentPermissionView: View {
     static let width: CGFloat = 320
 
     @ObservedObject private var manager = AgentActivityManager.shared
+    /// Какой по счёту вопрос показан и что уже выбрано
+    @State private var step = 0
+    @State private var answers: [String: String] = [:]
+    @State private var picked: [String] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                AgentBadge(status: .waiting, size: 18)
-                Text([request.agent, request.project].compactMap { $0 }.joined(separator: " · "))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                if extraCount > 0 {
-                    Text("+\(extraCount)")
-                        .font(.system(size: 10, weight: .medium).monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.5))
-                }
-                Button { manager.jump(to: request.sessionID) } label: {
-                    Image(systemName: "arrow.up.forward.app")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.6))
-                }
-                .buttonStyle(.plain)
-                .help("Go to this agent")
-                Text(request.tool)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.75))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(.white.opacity(0.12)))
+            header
+            switch request.kind {
+            case .tool: toolBody
+            case .question: questionBody
+            case .plan: planBody
             }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 2)
+        .padding(.bottom, 12)
+        .frame(width: width, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture {} // клики по карточке не должны открывать «чёлку»
+        .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
+    }
 
+    // MARK: Шапка
+
+    private var kindLabel: String {
+        switch request.kind {
+        case .tool: return request.tool
+        case .question: return "Question"
+        case .plan: return "Plan"
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            AgentBadge(status: .waiting, size: 18)
+            Text([request.agent, request.project].compactMap { $0 }.joined(separator: " · "))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if extraCount > 0 {
+                Text("+\(extraCount)")
+                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            Button { manager.jump(to: request.sessionID) } label: {
+                Image(systemName: "arrow.up.forward.app")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .buttonStyle(.plain)
+            .help("Go to this agent")
+            Text(kindLabel)
+                .font(.system(size: 10, weight: .medium, design: request.kind == .tool ? .monospaced : .default))
+                .foregroundStyle(.white.opacity(0.75))
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(.white.opacity(0.12)))
+        }
+    }
+
+    // MARK: Кнопки
+
+    private func secondaryButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, minHeight: 26)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.12)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func primaryButton(_ title: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.black)
+                .frame(maxWidth: .infinity, minHeight: 26)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(enabled ? 1 : 0.35)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    // MARK: Разрешение на действие
+
+    private var toolBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
             if !request.detail.isEmpty {
                 Text(request.detail)
                     .font(.system(size: 11, design: .monospaced))
@@ -485,35 +550,133 @@ struct AgentPermissionView: View {
                     .padding(8)
                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.07)))
             }
-
             HStack(spacing: 8) {
-                Button { manager.resolve(request.id, allow: false) } label: {
-                    Text("Deny")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, minHeight: 26)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.12)))
-                        .contentShape(Rectangle())
+                secondaryButton("Deny") { manager.resolve(request.id, allow: false) }
+                // «Всегда» есть, только если сам агент предложил правило для запоминания
+                if !request.suggestions.isEmpty {
+                    secondaryButton("Always") { manager.resolve(request.id, allow: true, always: true) }
+                        .help(request.suggestionText.map { "Always allow: \($0)" } ?? "Always allow this")
                 }
-                .buttonStyle(.plain)
-
-                Button { manager.resolve(request.id, allow: true) } label: {
-                    Text("Allow")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity, minHeight: 26)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                primaryButton("Allow") { manager.resolve(request.id, allow: true) }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 2)
-        .padding(.bottom, 12)
-        .frame(width: width, alignment: .leading)
-        .contentShape(Rectangle())
-        .onTapGesture {} // клики по карточке не должны открывать «чёлку»
-        .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
+    }
+
+    // MARK: Вопрос с вариантами
+
+    private var currentQuestion: AgentQuestion {
+        request.questions[min(step, request.questions.count - 1)]
+    }
+
+    private func record(_ value: String) {
+        answers[currentQuestion.question] = value
+        picked = []
+        if step + 1 < request.questions.count {
+            withAnimation(.smooth(duration: 0.25)) { step += 1 }
+        } else {
+            manager.answer(request.id, answers: answers)
+        }
+    }
+
+    private var questionBody: some View {
+        let q = currentQuestion
+        let multi = q.multiSelect == true
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                if let header = q.header, !header.isEmpty {
+                    Text(header)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                Spacer(minLength: 0)
+                if request.questions.count > 1 {
+                    Text("\(step + 1)/\(request.questions.count)")
+                        .font(.system(size: 10, weight: .medium).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            }
+            Text(q.question)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 5) {
+                    ForEach(Array(q.options.enumerated()), id: \.offset) { _, option in
+                        let selected = picked.contains(option.label)
+                        Button {
+                            if multi {
+                                if selected { picked.removeAll { $0 == option.label } } else { picked.append(option.label) }
+                            } else {
+                                record(option.label)
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if multi {
+                                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(selected ? Color.white : Color.white.opacity(0.4))
+                                }
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(option.label)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .lineLimit(2)
+                                    if let description = option.description, !description.isEmpty {
+                                        Text(description)
+                                            .font(.system(size: 10.5))
+                                            .foregroundStyle(.white.opacity(0.55))
+                                            .lineLimit(2)
+                                            .multilineTextAlignment(.leading)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(selected ? 0.22 : 0.1)))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(maxHeight: 170)
+
+            HStack(spacing: 8) {
+                secondaryButton("In terminal") { manager.deferToTerminal(request.id) }
+                    .help("Answer in the terminal instead")
+                if multi {
+                    primaryButton(step + 1 < request.questions.count ? "Next" : "Done", enabled: !picked.isEmpty) {
+                        record(picked.joined(separator: ", "))
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: План на утверждение
+
+    private var planBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.vertical, showsIndicators: false) {
+                Text(request.plan.isEmpty ? "The agent has a plan ready." : request.plan)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+            .frame(maxHeight: 130)
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.07)))
+            HStack(spacing: 8) {
+                secondaryButton("Keep planning") {
+                    manager.resolve(request.id, allow: false, denyMessage: "The user wants to keep planning (answered from Chelka)")
+                }
+                primaryButton("Approve") { manager.resolve(request.id, allow: true) }
+            }
+        }
     }
 }
