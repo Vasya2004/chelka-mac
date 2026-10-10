@@ -83,6 +83,12 @@ struct IdleArt: View {
             case .moon: IdleMoon.draw(in: &context, zones: zones, t: t)
             case .garden: IdleGarden.draw(in: &context, zones: zones, t: t)
             case .voxels: IdleVoxels.draw(in: &context, zones: zones, t: t)
+            case .lighthouse: IdleLighthouse.draw(in: &context, zones: zones, t: t)
+            case .carnival: IdleCarnival.draw(in: &context, zones: zones, t: t)
+            case .windmill: IdleWindmill.draw(in: &context, zones: zones, t: t)
+            case .city: IdleCity.draw(in: &context, zones: zones, t: t)
+            case .cauldron: IdleCauldron.draw(in: &context, zones: zones, t: t)
+            case .arcade: IdleArcade.draw(in: &context, zones: zones, t: t)
             }
         }
     }
@@ -3031,6 +3037,508 @@ private enum IdleVoxels {
                 spark.move(to: CGPoint(x: px, y: py - r)); spark.addLine(to: CGPoint(x: px, y: py + r))
                 context.stroke(spark, with: .color(.white.opacity(0.9 * Double(scale))), lineWidth: 0.8)
             }
+        }
+    }
+}
+
+// MARK: - Звёзды для ночных сценок
+
+private func idleStars(_ context: inout GraphicsContext, zones: IdleZones, t: Double, count: Int, seed: Int, maxY: CGFloat? = nil) {
+    let h = maxY ?? zones.size.height
+    for i in 0..<count {
+        let zone = i % 2 == 0 ? zones.left : zones.right
+        let x = zone.minX + zone.width * CGFloat(idleRandom(seed + i))
+        let y = h * CGFloat(0.05 + 0.75 * idleRandom(seed + i + 90))
+        let twinkle = 0.3 + 0.7 * abs(sin(t * 1.7 + Double(seed + i)))
+        context.fill(Path(CGRect(x: x, y: y, width: 1.1, height: 1.1)), with: .color(.white.opacity(0.6 * twinkle)))
+    }
+}
+
+// MARK: Маяк
+
+/// Ночное побережье: на скалах слева маяк, его луч медленно скользит по воде справа, где качается буй и плывёт лодка
+private enum IdleLighthouse {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        idleStars(&context, zones: zones, t: t, count: 12, seed: 900, maxY: h * 0.7)
+
+        // Море справа: две волны
+        for layer in 0..<2 {
+            var path = Path()
+            path.move(to: CGPoint(x: zones.right.minX, y: h))
+            var x = zones.right.minX
+            while x <= zones.right.maxX {
+                let y = h - 8 + CGFloat(layer) * 3 + CGFloat(sin(Double(x) * 0.3 + t * (1.4 + Double(layer) * 0.5))) * 1.4
+                path.addLine(to: CGPoint(x: x, y: y))
+                x += 2
+            }
+            path.addLine(to: CGPoint(x: zones.right.maxX, y: h))
+            path.closeSubpath()
+            context.fill(path, with: .color(Color(red: 0.08 + 0.05 * Double(layer), green: 0.25 + 0.1 * Double(layer), blue: 0.5 + 0.1 * Double(layer))))
+        }
+
+        // Скалы и башня слева
+        idleMound(&context, zone: zones.left, h: h, pile: 6, color: Color(white: 0.22), shift: 1.2)
+        let tx = zones.left.midX + 2
+        let base = h - 5
+        let height: CGFloat = 19
+        let tower = Path { p in
+            p.move(to: CGPoint(x: tx - 4.2, y: base)); p.addLine(to: CGPoint(x: tx + 4.2, y: base))
+            p.addLine(to: CGPoint(x: tx + 2.6, y: base - height)); p.addLine(to: CGPoint(x: tx - 2.6, y: base - height)); p.closeSubpath()
+        }
+        context.fill(tower, with: .color(.white.opacity(0.95)))
+        var stripe = context
+        stripe.clip(to: tower)
+        for k in 0..<3 {
+            stripe.fill(Path(CGRect(x: tx - 6, y: base - 4 - CGFloat(k) * 6.4, width: 12, height: 3.2)), with: .color(Color(red: 0.88, green: 0.2, blue: 0.2)))
+        }
+        // Галерея, фонарная комната, крыша
+        context.fill(Path(CGRect(x: tx - 4, y: base - height - 1, width: 8, height: 1.4)), with: .color(Color(white: 0.3)))
+        context.fill(Path(CGRect(x: tx - 2.4, y: base - height - 5, width: 4.8, height: 4)), with: .color(Color(red: 1, green: 0.9, blue: 0.5)))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: tx - 3.4, y: base - height - 5)); p.addLine(to: CGPoint(x: tx, y: base - height - 9)); p.addLine(to: CGPoint(x: tx + 3.4, y: base - height - 5)); p.closeSubpath()
+        }, with: .color(Color(red: 0.7, green: 0.15, blue: 0.15)))
+
+        // Луч: поворачивается вокруг башни; когда смотрит на нас, лампа вспыхивает, когда в сторону — тянется лучом
+        let lamp = CGPoint(x: tx, y: base - height - 3)
+        let angle = t * 0.85
+        let dir = CGFloat(cos(angle))
+        let reach = 78 * abs(dir)
+        let sign: CGFloat = dir >= 0 ? 1 : -1
+        let spread = 3 + reach * 0.16
+        let beam = Path { p in
+            p.move(to: lamp)
+            p.addLine(to: CGPoint(x: lamp.x + sign * reach, y: lamp.y - spread + 3))
+            p.addLine(to: CGPoint(x: lamp.x + sign * reach, y: lamp.y + spread + 3))
+            p.closeSubpath()
+        }
+        context.fill(beam, with: .linearGradient(Gradient(colors: [Color(red: 1, green: 0.95, blue: 0.6).opacity(0.55), Color(red: 1, green: 0.95, blue: 0.6).opacity(0)]),
+                                                 startPoint: lamp, endPoint: CGPoint(x: lamp.x + sign * reach, y: lamp.y)))
+        let flare = 5 + 7 * (1 - abs(dir))
+        context.fill(Path(ellipseIn: CGRect(x: lamp.x - flare, y: lamp.y - flare, width: flare * 2, height: flare * 2)),
+                     with: .radialGradient(Gradient(colors: [Color(red: 1, green: 0.95, blue: 0.6).opacity(0.7), .clear]), center: lamp, startRadius: 0, endRadius: flare))
+
+        // Буй и лодка на море
+        let buoyX = zones.right.minX + 8
+        let buoyY = h - 9 + CGFloat(sin(t * 1.9)) * 1.3
+        context.fill(Path(roundedRect: CGRect(x: buoyX - 2, y: buoyY - 4, width: 4, height: 5), cornerRadius: 1.5), with: .color(Color(red: 0.95, green: 0.3, blue: 0.2)))
+        if Int(t * 1.6) % 2 == 0 {
+            context.fill(Path(ellipseIn: CGRect(x: buoyX - 1.2, y: buoyY - 6.4, width: 2.4, height: 2.4)), with: .color(Color(red: 1, green: 0.9, blue: 0.4)))
+        }
+        let boatX = zones.right.minX + CGFloat(idleWrap(t * 2.4, Double(zones.right.width + 20))) - 8
+        let boatY = h - 8.5 + CGFloat(sin(t * 1.5 + 1)) * 1.2
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: boatX - 4, y: boatY)); p.addLine(to: CGPoint(x: boatX + 4, y: boatY)); p.addLine(to: CGPoint(x: boatX + 2.5, y: boatY + 2)); p.addLine(to: CGPoint(x: boatX - 2.5, y: boatY + 2)); p.closeSubpath()
+        }, with: .color(Color(red: 0.55, green: 0.35, blue: 0.2)))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: boatX, y: boatY - 7)); p.addLine(to: CGPoint(x: boatX + 3.2, y: boatY - 0.4)); p.addLine(to: CGPoint(x: boatX, y: boatY - 0.4)); p.closeSubpath()
+        }, with: .color(.white.opacity(0.9)))
+        _ = w
+    }
+}
+
+// MARK: Карнавал
+
+/// Ярмарка: слева крутится колесо обозрения с огоньками, справа качаются воздушные шарики, над обеими сторонами гирлянда флажков
+private enum IdleCarnival {
+    static let palette: [Color] = [
+        Color(red: 1, green: 0.35, blue: 0.4), Color(red: 1, green: 0.85, blue: 0.3), Color(red: 0.35, green: 0.8, blue: 1),
+        Color(red: 0.55, green: 0.9, blue: 0.5), Color(red: 0.8, green: 0.5, blue: 1), Color(red: 1, green: 0.6, blue: 0.25),
+    ]
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let ground = h - 3
+
+        // Гирлянда флажков по всей ширине (за чёлкой её не видно)
+        var line = Path()
+        line.move(to: CGPoint(x: 0, y: 1.5))
+        line.addQuadCurve(to: CGPoint(x: w, y: 1.5), control: CGPoint(x: w / 2, y: 7))
+        context.stroke(line, with: .color(.white.opacity(0.4)), lineWidth: 0.6)
+        var fx: CGFloat = 4
+        var index = 0
+        while fx < w {
+            let u = fx / w
+            let sag = 4 * u * (1 - u) * 5.5
+            let sway = CGFloat(sin(t * 2.4 + Double(index))) * 0.7
+            context.fill(Path { p in
+                p.move(to: CGPoint(x: fx - 2, y: 1.5 + sag)); p.addLine(to: CGPoint(x: fx + 2, y: 1.5 + sag))
+                p.addLine(to: CGPoint(x: fx + sway, y: 5.5 + sag)); p.closeSubpath()
+            }, with: .color(palette[index % palette.count]))
+            fx += 8
+            index += 1
+        }
+
+        // Земля
+        for (i, zone) in [zones.left, zones.right].enumerated() {
+            idleMound(&context, zone: zone, h: h, pile: 3, color: Color(red: 0.2, green: 0.35, blue: 0.25), shift: Double(i) * 2)
+        }
+
+        // Колесо обозрения
+        let c = CGPoint(x: zones.left.midX, y: h * 0.52)
+        let r: CGFloat = 11
+        let spin = t * 0.45
+        context.stroke(Path { p in
+            p.move(to: c); p.addLine(to: CGPoint(x: c.x - 6, y: ground)); p.move(to: c); p.addLine(to: CGPoint(x: c.x + 6, y: ground))
+        }, with: .color(Color(white: 0.55)), lineWidth: 1.2)
+        context.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(Color(white: 0.85)), lineWidth: 0.9)
+        context.stroke(Path(ellipseIn: CGRect(x: c.x - r * 0.55, y: c.y - r * 0.55, width: r * 1.1, height: r * 1.1)), with: .color(Color(white: 0.5)), lineWidth: 0.5)
+        for k in 0..<8 {
+            let a = spin + Double(k) * .pi / 4
+            var spoke = Path()
+            spoke.move(to: c); spoke.addLine(to: CGPoint(x: c.x + r * CGFloat(cos(a)), y: c.y + r * CGFloat(sin(a))))
+            context.stroke(spoke, with: .color(Color(white: 0.6)), lineWidth: 0.6)
+            // Кабинка висит под ободом и всегда вертикальна
+            let gx = c.x + r * CGFloat(cos(a)), gy = c.y + r * CGFloat(sin(a))
+            context.stroke(Path { p in p.move(to: CGPoint(x: gx, y: gy)); p.addLine(to: CGPoint(x: gx, y: gy + 1.8)) }, with: .color(.white.opacity(0.7)), lineWidth: 0.5)
+            context.fill(Path(roundedRect: CGRect(x: gx - 1.8, y: gy + 1.8, width: 3.6, height: 2.8), cornerRadius: 0.8), with: .color(palette[k % palette.count]))
+        }
+        // Огоньки по ободу бегут по кругу
+        for k in 0..<16 {
+            let a = Double(k) * .pi / 8
+            let on = (Int(t * 5) + k) % 3 == 0
+            context.fill(Path(ellipseIn: CGRect(x: c.x + (r + 0.8) * CGFloat(cos(a)) - 0.7, y: c.y + (r + 0.8) * CGFloat(sin(a)) - 0.7, width: 1.4, height: 1.4)),
+                         with: .color((on ? Color(red: 1, green: 0.9, blue: 0.5) : Color(white: 0.3))))
+        }
+        context.fill(Path(ellipseIn: CGRect(x: c.x - 1.6, y: c.y - 1.6, width: 3.2, height: 3.2)), with: .color(Color(red: 1, green: 0.4, blue: 0.4)))
+
+        // Воздушные шарики справа
+        for k in 0..<3 {
+            let anchor = CGPoint(x: zones.right.midX - 7 + CGFloat(k) * 7, y: ground)
+            let bob = CGFloat(sin(t * 1.3 + Double(k) * 1.7))
+            let top = CGPoint(x: anchor.x + CGFloat(sin(t * 0.9 + Double(k))) * 2.5, y: h * (0.36 - CGFloat(k % 2) * 0.08) + bob * 2)
+            context.stroke(Path { p in
+                p.move(to: anchor); p.addQuadCurve(to: CGPoint(x: top.x, y: top.y + 5), control: CGPoint(x: anchor.x + bob * 2, y: (anchor.y + top.y) / 2))
+            }, with: .color(.white.opacity(0.55)), lineWidth: 0.5)
+            let color = palette[(k * 2 + 1) % palette.count]
+            context.fill(Path(ellipseIn: CGRect(x: top.x - 3.4, y: top.y - 4.2, width: 6.8, height: 8.2)), with: .color(color))
+            context.fill(Path(ellipseIn: CGRect(x: top.x - 1.8, y: top.y - 3, width: 1.8, height: 2.4)), with: .color(.white.opacity(0.55)))
+            context.fill(Path { p in
+                p.move(to: CGPoint(x: top.x - 1, y: top.y + 4.4)); p.addLine(to: CGPoint(x: top.x + 1, y: top.y + 4.4)); p.addLine(to: CGPoint(x: top.x, y: top.y + 5.8)); p.closeSubpath()
+            }, with: .color(color))
+        }
+    }
+}
+
+// MARK: Мельница
+
+/// Деревенский пейзаж: слева мельница крутит крылья, справа колышется пшеница, по небу плывут облака, иногда пролетает ворона
+private enum IdleWindmill {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let ground = h - 3.5
+
+        // Облака плывут по всей ширине медленно
+        for k in 0..<2 {
+            let x = CGFloat(idleWrap(t * (3.5 + Double(k) * 1.5) + Double(k) * 120, Double(w + 40))) - 20
+            let y = 5 + CGFloat(k) * 5
+            for (dx, dy, r) in [(-4.0, 0.0, 2.6), (0.0, -1.2, 3.4), (4.5, 0.0, 2.8)] {
+                context.fill(Path(ellipseIn: CGRect(x: x + CGFloat(dx) - CGFloat(r), y: y + CGFloat(dy) - CGFloat(r), width: CGFloat(r) * 2, height: CGFloat(r) * 2)),
+                             with: .color(.white.opacity(0.82)))
+            }
+        }
+
+        // Холмы
+        for (i, zone) in [zones.left, zones.right].enumerated() {
+            idleMound(&context, zone: zone, h: h, pile: 4, color: Color(red: 0.25, green: 0.5, blue: 0.25), shift: Double(i) * 2.2)
+        }
+
+        // Мельница
+        let mx = zones.left.midX
+        let tower = Path { p in
+            p.move(to: CGPoint(x: mx - 6, y: ground)); p.addLine(to: CGPoint(x: mx + 6, y: ground))
+            p.addLine(to: CGPoint(x: mx + 3.4, y: ground - 15)); p.addLine(to: CGPoint(x: mx - 3.4, y: ground - 15)); p.closeSubpath()
+        }
+        context.fill(tower, with: .color(Color(red: 0.93, green: 0.86, blue: 0.7)))
+        context.fill(Path(roundedRect: CGRect(x: mx - 1.6, y: ground - 5, width: 3.2, height: 5), cornerRadius: 1.4), with: .color(Color(red: 0.4, green: 0.25, blue: 0.15)))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: mx - 4.4, y: ground - 15)); p.addLine(to: CGPoint(x: mx, y: ground - 20)); p.addLine(to: CGPoint(x: mx + 4.4, y: ground - 15)); p.closeSubpath()
+        }, with: .color(Color(red: 0.6, green: 0.3, blue: 0.2)))
+        let hub = CGPoint(x: mx, y: ground - 15)
+        for k in 0..<4 {
+            let a = t * 0.9 + Double(k) * .pi / 2
+            var layer = context
+            layer.translateBy(x: hub.x, y: hub.y)
+            layer.rotate(by: .radians(a))
+            layer.fill(Path(CGRect(x: -0.6, y: 0, width: 1.2, height: 14)), with: .color(Color(red: 0.45, green: 0.3, blue: 0.2)))
+            layer.fill(Path(CGRect(x: 0.6, y: 3, width: 3.6, height: 10)), with: .color(.white.opacity(0.75)))
+            layer.stroke(Path(CGRect(x: 0.6, y: 3, width: 3.6, height: 10)), with: .color(Color(red: 0.45, green: 0.3, blue: 0.2)), lineWidth: 0.5)
+        }
+        context.fill(Path(ellipseIn: CGRect(x: hub.x - 1.6, y: hub.y - 1.6, width: 3.2, height: 3.2)), with: .color(Color(red: 0.4, green: 0.25, blue: 0.15)))
+
+        // Пшеница справа: колосья колышутся волной от ветра
+        for k in 0..<9 {
+            let x = zones.right.minX + 4 + CGFloat(k) * (zones.right.width - 8) / 8
+            let height = 11 + CGFloat(idleRandom(k + 40)) * 4
+            let sway = CGFloat(sin(t * 1.9 + Double(k) * 0.6)) * 2.2
+            var stalk = Path()
+            stalk.move(to: CGPoint(x: x, y: ground))
+            stalk.addQuadCurve(to: CGPoint(x: x + sway, y: ground - height), control: CGPoint(x: x + sway * 0.3, y: ground - height * 0.5))
+            context.stroke(stalk, with: .color(Color(red: 0.75, green: 0.65, blue: 0.25)), lineWidth: 0.8)
+            context.fill(Path(ellipseIn: CGRect(x: x + sway - 1.2, y: ground - height - 3, width: 2.4, height: 4.4)), with: .color(Color(red: 0.95, green: 0.8, blue: 0.3)))
+        }
+
+        // Ворона пролетает раз в 14 секунд справа налево
+        let crow = t.truncatingRemainder(dividingBy: 14)
+        if crow < 6 {
+            let x = w + 8 - CGFloat(crow / 6) * (w + 16)
+            let y = h * 0.3 + CGFloat(sin(crow * 3)) * 2
+            let flap = CGFloat(sin(t * 12)) * 2
+            var wings = Path()
+            wings.move(to: CGPoint(x: x - 3.5, y: y - flap)); wings.addQuadCurve(to: CGPoint(x: x, y: y), control: CGPoint(x: x - 1.5, y: y - 2.4 + flap))
+            wings.addQuadCurve(to: CGPoint(x: x + 3.5, y: y - flap), control: CGPoint(x: x + 1.5, y: y - 2.4 + flap))
+            context.stroke(wings, with: .color(Color(white: 0.1)), lineWidth: 1.2)
+        }
+    }
+}
+
+// MARK: Ночной город
+
+/// Силуэты небоскрёбов с мерцающими окнами, на крышах мигают красные огни, по небу летит самолёт, светится неоновая вывеска, над городом — луна
+private enum IdleCity {
+    static let leftTowers: [(x: CGFloat, w: CGFloat, hgt: CGFloat)] = [(0, 8, 17), (9, 9, 26), (19, 7, 14), (27, 9, 21)]
+    static let rightTowers: [(x: CGFloat, w: CGFloat, hgt: CGFloat)] = [(0, 8, 22), (9, 7, 14), (17, 10, 28), (28, 8, 18)]
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        idleStars(&context, zones: zones, t: t, count: 10, seed: 950, maxY: h * 0.5)
+
+        // Луна над правой стороной
+        let moon = CGPoint(x: zones.right.minX + 12, y: 6.5)
+        context.fill(Path(ellipseIn: CGRect(x: moon.x - 9, y: moon.y - 9, width: 18, height: 18)),
+                     with: .radialGradient(Gradient(colors: [Color(red: 0.9, green: 0.92, blue: 1).opacity(0.2), .clear]), center: moon, startRadius: 2, endRadius: 9))
+        var crescent = Path(ellipseIn: CGRect(x: moon.x - 4, y: moon.y - 4, width: 8, height: 8))
+        crescent = crescent.subtracting(Path(ellipseIn: CGRect(x: moon.x - 1.6, y: moon.y - 5, width: 8, height: 8)))
+        context.fill(crescent, with: .color(Color(red: 0.95, green: 0.95, blue: 1)))
+
+        // Самолёт: раз в 16 секунд пролетает через весь экран
+        let flight = t.truncatingRemainder(dividingBy: 16)
+        if flight < 8 {
+            let x = -8 + CGFloat(flight / 8) * (w + 16)
+            let y: CGFloat = 4.5
+            context.fill(Path(CGRect(x: x - 3, y: y, width: 6, height: 1.2)), with: .color(Color(white: 0.85)))
+            context.fill(Path(CGRect(x: x - 0.4, y: y - 1.6, width: 0.9, height: 4.4)), with: .color(Color(white: 0.7)))
+            if Int(t * 2.4) % 2 == 0 { context.fill(Path(ellipseIn: CGRect(x: x - 4, y: y - 0.2, width: 1.8, height: 1.8)), with: .color(Color(red: 1, green: 0.2, blue: 0.2))) }
+            else { context.fill(Path(ellipseIn: CGRect(x: x + 2.4, y: y - 0.2, width: 1.8, height: 1.8)), with: .color(Color(red: 0.3, green: 1, blue: 0.4))) }
+        }
+
+        for (index, towers) in [leftTowers, rightTowers].enumerated() {
+            let zone = index == 0 ? zones.left : zones.right
+            for (i, tower) in towers.enumerated() {
+                let x = zone.minX + tower.x
+                let top = h - tower.hgt
+                let seed = index * 20 + i * 5
+                context.fill(Path(CGRect(x: x, y: top, width: tower.w, height: tower.hgt)), with: .color(Color(red: 0.06, green: 0.07, blue: 0.14)))
+                // Окна: каждое зажигается и гаснет медленно, независимо от остальных
+                var wy = top + 2.5
+                var row = 0
+                while wy < h - 2 {
+                    var wx = x + 1.4
+                    var col = 0
+                    while wx < x + tower.w - 1.6 {
+                        let cell = seed * 7 + row * 5 + col
+                        let on = idleRandom(cell + Int(floor(t * 0.18 + idleRandom(cell) * 3))) > 0.5
+                        if on {
+                            let warm = idleRandom(cell + 7) > 0.25
+                            context.fill(Path(CGRect(x: wx, y: wy, width: 1.5, height: 2)),
+                                         with: .color(warm ? Color(red: 1, green: 0.85, blue: 0.45) : Color(red: 0.5, green: 0.85, blue: 1)))
+                        }
+                        wx += 3
+                        col += 1
+                    }
+                    wy += 4.2
+                    row += 1
+                }
+                // Красный огонёк на самом высоком здании
+                if tower.hgt >= 26, Int(t * 1.2) % 2 == 0 {
+                    context.fill(Path(ellipseIn: CGRect(x: x + tower.w / 2 - 1, y: top - 2, width: 2, height: 2)), with: .color(Color(red: 1, green: 0.2, blue: 0.2)))
+                    context.fill(Path(ellipseIn: CGRect(x: x + tower.w / 2 - 3, y: top - 4, width: 6, height: 6)),
+                                 with: .radialGradient(Gradient(colors: [Color.red.opacity(0.35), .clear]), center: CGPoint(x: x + tower.w / 2, y: top - 1), startRadius: 0, endRadius: 3))
+                }
+            }
+        }
+        // Неоновая вывеска на левом здании: иногда мигает
+        let flicker = idleRandom(Int(t * 9)) > 0.15 || Int(t / 5) % 3 != 0
+        let neon = Color(red: 1, green: 0.3, blue: 0.7)
+        let signRect = CGRect(x: zones.left.minX + 10, y: h - 19, width: 7, height: 3)
+        context.fill(Path(roundedRect: signRect.insetBy(dx: -2, dy: -2), cornerRadius: 3), with: .color(neon.opacity(flicker ? 0.22 : 0.04)))
+        context.stroke(Path(roundedRect: signRect, cornerRadius: 1), with: .color(neon.opacity(flicker ? 1 : 0.25)), lineWidth: 0.8)
+    }
+}
+
+// MARK: Котёл
+
+/// Ведьмин котёл на огне слева: булькает зелье, лопаются пузыри, поднимается пар; справа парит светящаяся книга заклинаний рядом со свечой
+private enum IdleCauldron {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let ground = h - 3
+        for (i, zone) in [zones.left, zones.right].enumerated() {
+            idleMound(&context, zone: zone, h: h, pile: 3, color: Color(red: 0.16, green: 0.1, blue: 0.22), shift: Double(i) * 2)
+        }
+
+        // Котёл
+        let cx = zones.left.midX
+        let potTop = ground - 13
+        // Огонь под котлом
+        for k in 0..<3 {
+            let fx = cx - 5 + CGFloat(k) * 5
+            let flick = CGFloat(abs(sin(t * 9 + Double(k) * 2)))
+            context.fill(Path { p in
+                p.move(to: CGPoint(x: fx - 2, y: ground)); p.addQuadCurve(to: CGPoint(x: fx, y: ground - 4 - flick * 3), control: CGPoint(x: fx - 2.4, y: ground - 3))
+                p.addQuadCurve(to: CGPoint(x: fx + 2, y: ground), control: CGPoint(x: fx + 2.4, y: ground - 3)); p.closeSubpath()
+            }, with: .color(Color(red: 1, green: 0.5, blue: 0.1)))
+            context.fill(Path(ellipseIn: CGRect(x: fx - 0.9, y: ground - 3 - flick, width: 1.8, height: 2.6)), with: .color(Color(red: 1, green: 0.9, blue: 0.4)))
+        }
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: cx - 7.5, y: potTop + 1)); p.addQuadCurve(to: CGPoint(x: cx - 5, y: ground - 4), control: CGPoint(x: cx - 9, y: potTop + 8))
+            p.addLine(to: CGPoint(x: cx + 5, y: ground - 4)); p.addQuadCurve(to: CGPoint(x: cx + 7.5, y: potTop + 1), control: CGPoint(x: cx + 9, y: potTop + 8)); p.closeSubpath()
+        }, with: .color(Color(white: 0.1)))
+        context.fill(Path(ellipseIn: CGRect(x: cx - 8, y: potTop - 1.6, width: 16, height: 4)), with: .color(Color(white: 0.2)))
+        let green = Color(red: 0.4, green: 1, blue: 0.5)
+        context.fill(Path(ellipseIn: CGRect(x: cx - 6.4, y: potTop - 1, width: 12.8, height: 2.8)), with: .color(green.opacity(0.9)))
+        // Пузыри: поднимаются со дна, лопаются у поверхности
+        for k in 0..<5 {
+            let phase = idleWrap(t * 0.9 + Double(k) * 0.21, 1)
+            let bx = cx - 4.5 + CGFloat(idleRandom(k + 60)) * 9
+            let r = 0.9 + CGFloat(idleRandom(k + 70)) * 0.8
+            if phase < 0.8 {
+                context.fill(Path(ellipseIn: CGRect(x: bx - r, y: potTop + 1 - CGFloat(phase) * 3, width: r * 2, height: r * 2)), with: .color(green.opacity(0.8)))
+            } else {
+                // Лопнул: кольцо и брызги
+                let q = CGFloat((phase - 0.8) / 0.2)
+                context.stroke(Path(ellipseIn: CGRect(x: bx - r - q * 2, y: potTop - 0.4 - q, width: (r + q * 2) * 2, height: (r + q * 2) * 0.8)),
+                               with: .color(green.opacity(Double(1 - q))), lineWidth: 0.6)
+            }
+        }
+        // Пар: зелёные завитки уходят вверх и извиваются
+        for k in 0..<5 {
+            let age = idleWrap(t * 0.42 + Double(k) / 5, 1)
+            let x = cx + CGFloat(sin(age * 7 + Double(k) * 2)) * (2 + CGFloat(age) * 5)
+            let y = potTop - 2 - CGFloat(age) * 14
+            let r = 1.4 + CGFloat(age) * 2.6
+            context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: .color(green.opacity(0.35 * (1 - age))))
+        }
+
+        // Книга заклинаний справа
+        let bx = zones.right.midX - 3
+        let by = h * 0.44 + CGFloat(sin(t * 1.6)) * 2.5
+        let aura = 0.6 + 0.4 * sin(t * 3)
+        context.fill(Path(ellipseIn: CGRect(x: bx - 13, y: by - 11, width: 26, height: 22)),
+                     with: .radialGradient(Gradient(colors: [Color(red: 0.75, green: 0.5, blue: 1).opacity(0.38 * aura), .clear]), center: CGPoint(x: bx, y: by), startRadius: 0, endRadius: 13))
+        context.fill(Path(roundedRect: CGRect(x: bx - 7.5, y: by - 1.6, width: 15, height: 6.6), cornerRadius: 1), with: .color(Color(red: 0.4, green: 0.18, blue: 0.5)))
+        for side in [-1.0, 1.0] {
+            context.fill(Path { p in
+                p.move(to: CGPoint(x: bx, y: by + 3)); p.addLine(to: CGPoint(x: bx + CGFloat(side) * 6.8, y: by + 2.4))
+                p.addLine(to: CGPoint(x: bx + CGFloat(side) * 6.8, y: by - 4.2)); p.addLine(to: CGPoint(x: bx, y: by - 3.4)); p.closeSubpath()
+            }, with: .color(Color(red: 0.98, green: 0.93, blue: 0.8)))
+        }
+        // Листается страница
+        let flip = CGFloat(cos(t * 2.4))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: bx, y: by + 3)); p.addLine(to: CGPoint(x: bx + flip * 6.8, y: by + 2.4))
+            p.addLine(to: CGPoint(x: bx + flip * 6.8, y: by - 4.2)); p.addLine(to: CGPoint(x: bx, y: by - 3.4)); p.closeSubpath()
+        }, with: .color(Color.white.opacity(0.85)))
+        // Руны над книгой и искры
+        for k in 0..<5 {
+            let age = idleWrap(t * 0.6 + Double(k) / 5, 1)
+            let x = bx + CGFloat(sin(age * 9 + Double(k) * 1.4)) * 6
+            let y = by - 4 - CGFloat(age) * 11
+            var spark = Path()
+            let r = 1.2 * CGFloat(sin(age * .pi))
+            spark.move(to: CGPoint(x: x - r, y: y)); spark.addLine(to: CGPoint(x: x + r, y: y))
+            spark.move(to: CGPoint(x: x, y: y - r)); spark.addLine(to: CGPoint(x: x, y: y + r))
+            context.stroke(spark, with: .color(Color(red: 0.9, green: 0.75, blue: 1).opacity(0.9)), lineWidth: 0.8)
+        }
+        // Свеча рядом с книгой
+        let candleX = zones.right.maxX - 6
+        context.fill(Path(roundedRect: CGRect(x: candleX - 1.5, y: ground - 9, width: 3, height: 9), cornerRadius: 0.6), with: .color(Color(red: 0.95, green: 0.9, blue: 0.8)))
+        let flame = 0.8 + 0.2 * sin(t * 10) * sin(t * 4.3)
+        context.fill(Path(ellipseIn: CGRect(x: candleX - 8, y: ground - 19, width: 16, height: 16)),
+                     with: .radialGradient(Gradient(colors: [Color(red: 1, green: 0.8, blue: 0.4).opacity(0.25 * flame), .clear]), center: CGPoint(x: candleX, y: ground - 11), startRadius: 0, endRadius: 8))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: candleX - 1.2, y: ground - 9)); p.addQuadCurve(to: CGPoint(x: candleX, y: ground - 14 * flame), control: CGPoint(x: candleX - 1.8, y: ground - 12))
+            p.addQuadCurve(to: CGPoint(x: candleX + 1.2, y: ground - 9), control: CGPoint(x: candleX + 1.8, y: ground - 12)); p.closeSubpath()
+        }, with: .color(Color(red: 1, green: 0.8, blue: 0.3)))
+    }
+}
+
+// MARK: Аркада
+
+/// Два неоновых игровых автомата: слева на экране идёт мини-понг, справа маршируют пришельцы; кнопки мигают, вывески светятся
+private enum IdleArcade {
+    private static func cabinet(_ context: inout GraphicsContext, center x: CGFloat, ground: CGFloat, neon: Color, t: Double, game: (inout GraphicsContext, CGRect) -> Void) {
+        let width: CGFloat = 15, height: CGFloat = 27
+        let body = CGRect(x: x - width / 2, y: ground - height, width: width, height: height)
+        // Свечение на полу и по контуру
+        context.fill(Path(ellipseIn: CGRect(x: x - 11, y: ground - 3, width: 22, height: 6)),
+                     with: .radialGradient(Gradient(colors: [neon.opacity(0.35), .clear]), center: CGPoint(x: x, y: ground), startRadius: 0, endRadius: 11))
+        context.fill(Path(roundedRect: body, cornerRadius: 2), with: .color(Color(red: 0.12, green: 0.08, blue: 0.22)))
+        context.stroke(Path(roundedRect: body, cornerRadius: 2), with: .color(neon.opacity(0.9)), lineWidth: 0.9)
+        // Вывеска сверху мигает по буквам
+        let marquee = CGRect(x: body.minX + 2, y: body.minY + 2, width: width - 4, height: 3)
+        context.fill(Path(roundedRect: marquee, cornerRadius: 0.8), with: .color(neon.opacity(0.35 + 0.5 * abs(sin(t * 3)))))
+        // Экран
+        let screen = CGRect(x: body.minX + 2.2, y: body.minY + 7, width: width - 4.4, height: 9)
+        context.fill(Path(roundedRect: screen, cornerRadius: 1), with: .color(.black))
+        var inner = context
+        inner.clip(to: Path(roundedRect: screen, cornerRadius: 1))
+        game(&inner, screen)
+        context.stroke(Path(roundedRect: screen, cornerRadius: 1), with: .color(neon.opacity(0.5)), lineWidth: 0.5)
+        // Пульт: джойстик и кнопки
+        context.fill(Path(roundedRect: CGRect(x: body.minX + 1.5, y: body.minY + 18, width: width - 3, height: 3.4), cornerRadius: 0.8), with: .color(Color(red: 0.2, green: 0.14, blue: 0.34)))
+        let stick = CGFloat(sin(t * 4)) * 0.8
+        context.stroke(Path { p in p.move(to: CGPoint(x: body.minX + 4, y: body.minY + 19.8)); p.addLine(to: CGPoint(x: body.minX + 4 + stick, y: body.minY + 17.8)) },
+                       with: .color(Color(white: 0.7)), lineWidth: 0.7)
+        context.fill(Path(ellipseIn: CGRect(x: body.minX + 3 + stick, y: body.minY + 16.4, width: 2, height: 2)), with: .color(Color(red: 1, green: 0.25, blue: 0.3)))
+        for k in 0..<2 {
+            let on = Int(t * 6 + Double(k) * 2) % 3 != 0
+            context.fill(Path(ellipseIn: CGRect(x: body.minX + 8 + CGFloat(k) * 3, y: body.minY + 18.6, width: 2, height: 2)),
+                         with: .color(on ? (k == 0 ? Color(red: 1, green: 0.9, blue: 0.3) : Color(red: 0.3, green: 0.9, blue: 1)) : Color(white: 0.25)))
+        }
+        // Монетоприёмник
+        context.fill(Path(CGRect(x: x - 1.2, y: body.minY + 22.5, width: 2.4, height: 2)), with: .color(Color(red: 1, green: 0.85, blue: 0.3).opacity(0.5 + 0.5 * abs(sin(t * 2)))))
+    }
+
+    private static func triangle(_ v: Double) -> CGFloat { CGFloat(1 - abs(idleWrap(v, 2) - 1)) }
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let ground = h - 3
+        context.fill(Path(CGRect(x: 0, y: ground, width: w, height: 0.8)), with: .color(Color(red: 0.6, green: 0.3, blue: 0.9).opacity(0.5)))
+
+        // Понг слева
+        cabinet(&context, center: zones.left.midX, ground: ground, neon: Color(red: 1, green: 0.3, blue: 0.8), t: t) { screen, rect in
+            let ball = CGPoint(x: rect.minX + 2.5 + (rect.width - 5) * triangle(t * 0.95), y: rect.minY + 1.5 + (rect.height - 3) * triangle(t * 1.4))
+            screen.fill(Path(CGRect(x: ball.x - 0.8, y: ball.y - 0.8, width: 1.6, height: 1.6)), with: .color(.white))
+            for (side, lag) in [(0.0, 0.3), (1.0, 0.2)] {
+                let target = rect.minY + 1.5 + (rect.height - 3) * triangle((t - lag) * 1.4)
+                screen.fill(Path(CGRect(x: rect.minX + 0.8 + CGFloat(side) * (rect.width - 2.4), y: target - 1.8, width: 0.9, height: 3.6)), with: .color(Color(red: 0.4, green: 1, blue: 0.5)))
+            }
+            for k in 0..<4 { screen.fill(Path(CGRect(x: rect.midX - 0.2, y: rect.minY + 0.6 + CGFloat(k) * 2.4, width: 0.5, height: 1.2)), with: .color(.white.opacity(0.4))) }
+        }
+        // Пришельцы справа
+        cabinet(&context, center: zones.right.midX, ground: ground, neon: Color(red: 0.3, green: 0.9, blue: 1), t: t) { screen, rect in
+            let march = CGFloat(sin(t * 1.3)) * 1.6
+            let frame = Int(t * 2) % 2 == 0
+            for row in 0..<2 {
+                for col in 0..<3 {
+                    let ax = rect.minX + 2 + march + CGFloat(col) * 3.4
+                    let ay = rect.minY + 1.4 + CGFloat(row) * 2.4
+                    screen.fill(Path(CGRect(x: ax, y: ay, width: 2.2, height: 1.4)), with: .color(row == 0 ? Color(red: 0.4, green: 1, blue: 0.5) : Color(red: 1, green: 0.4, blue: 0.8)))
+                    screen.fill(Path(CGRect(x: ax + (frame ? 0 : 1.6), y: ay + 1.4, width: 0.6, height: 0.7)), with: .color(.white.opacity(0.8)))
+                }
+            }
+            // Игрок внизу стреляет
+            let px = rect.midX + CGFloat(sin(t * 0.9)) * 3
+            screen.fill(Path(CGRect(x: px - 1, y: rect.maxY - 1.6, width: 2, height: 1)), with: .color(.white))
+            let shot = idleWrap(t * 1.4, 1)
+            screen.fill(Path(CGRect(x: px - 0.2, y: rect.maxY - 2 - CGFloat(shot) * (rect.height - 3), width: 0.5, height: 1.4)), with: .color(Color(red: 1, green: 0.9, blue: 0.3)))
         }
     }
 }
