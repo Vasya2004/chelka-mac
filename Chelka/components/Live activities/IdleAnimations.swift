@@ -82,6 +82,7 @@ struct IdleArt: View {
             case .rainyNight: IdleRainyNight.draw(in: &context, zones: zones, t: t)
             case .moon: IdleMoon.draw(in: &context, zones: zones, t: t)
             case .garden: IdleGarden.draw(in: &context, zones: zones, t: t)
+            case .voxels: IdleVoxels.draw(in: &context, zones: zones, t: t)
             }
         }
     }
@@ -2780,6 +2781,256 @@ private enum IdleGarden {
             context.fill(Path(ellipseIn: CGRect(x: ax - 2, y: ay - 1.4, width: 4, height: 2.8)), with: .color(Color(red: 1, green: 0.8, blue: 0.1).opacity(Double(bloomFactor))))
             context.fill(Path(CGRect(x: ax - 0.6, y: ay - 1.4, width: 0.7, height: 2.8)), with: .color(Color(white: 0.1).opacity(Double(bloomFactor))))
             context.fill(Path(ellipseIn: CGRect(x: ax - 1.2, y: ay - 3.2 + CGFloat(sin(t * 60)) * 0.4, width: 2.4, height: 1.6)), with: .color(.white.opacity(0.7 * Double(bloomFactor))))
+        }
+    }
+}
+
+// MARK: - 3D-пиксели
+
+/// Вращающиеся воксельные предметы из игр: слева монета, сердце, меч, звезда, справа блок с «?», кристалл, зелье, ключ.
+/// Каждый предмет — маленькая модель из кубиков, которая по-настоящему поворачивается в 3D: видны то лицевая, то боковая грани.
+/// Предметы покачиваются над тенью, искрятся и каждые 7 секунд сменяют друг друга с «выскакиванием».
+private enum IdleVoxels {
+    struct RGB {
+        let r: Double, g: Double, b: Double
+        init(_ r: Double, _ g: Double, _ b: Double) { self.r = r; self.g = g; self.b = b }
+        func color(_ factor: Double = 1, opacity: Double = 1) -> Color {
+            Color(red: min(1, r * factor), green: min(1, g * factor), blue: min(1, b * factor)).opacity(opacity)
+        }
+    }
+
+    struct Voxel {
+        let x: CGFloat, y: CGFloat, z: CGFloat
+        let color: RGB
+    }
+
+    struct Model {
+        let voxels: [Voxel]
+        let glow: RGB
+        let spin: Double
+    }
+
+    /// Плоский рисунок, выдавленный на `depth` слоёв вглубь
+    private static func extrude(_ rows: [String], depth: Int, palette: [Character: RGB], glow: RGB, spin: Double = 1.7) -> Model {
+        var voxels: [Voxel] = []
+        let width = rows.map(\.count).max() ?? 0
+        for (row, line) in rows.enumerated() {
+            for (col, ch) in line.enumerated() {
+                guard let color = palette[ch] else { continue }
+                for z in 0..<depth {
+                    voxels.append(Voxel(x: CGFloat(col) - CGFloat(width - 1) / 2, y: CGFloat(row) - CGFloat(rows.count - 1) / 2,
+                                        z: CGFloat(z) - CGFloat(depth - 1) / 2, color: color))
+                }
+            }
+        }
+        return Model(voxels: voxels, glow: glow, spin: spin)
+    }
+
+    static let coin: Model = {
+        var voxels: [Voxel] = []
+        for x in -5...4 {
+            for y in -5...4 {
+                let fx = CGFloat(x) + 0.5, fy = CGFloat(y) + 0.5
+                let r = hypot(fx, fy)
+                guard r <= 4.9 else { continue }
+                let color: RGB
+                if r > 3.9 { color = RGB(0.85, 0.6, 0.1) }
+                else if r > 3.1 { color = RGB(1, 0.84, 0.2) }
+                else if abs(fx) < 1.1 && abs(fy) < 2.6 { color = RGB(1, 0.95, 0.6) }
+                else { color = RGB(0.98, 0.75, 0.15) }
+                for z in 0..<3 {
+                    voxels.append(Voxel(x: fx - 0.5, y: fy - 0.5, z: CGFloat(z) - 1, color: color))
+                }
+            }
+        }
+        return Model(voxels: voxels, glow: RGB(1, 0.8, 0.2), spin: 3.2)
+    }()
+
+    static let heart = extrude([
+        ".##.##.",
+        "#h#####",
+        "#######",
+        "#######",
+        ".#####.",
+        "..###..",
+        "...#...",
+    ], depth: 4, palette: ["#": RGB(0.95, 0.15, 0.3), "h": RGB(1, 0.7, 0.75)], glow: RGB(1, 0.2, 0.35), spin: 1.9)
+
+    static let sword = extrude([
+        "...#...",
+        "..#h#..",
+        "..#h#..",
+        "..#h#..",
+        "..#h#..",
+        "..#h#..",
+        "..#h#..",
+        "ggggggg",
+        "..bbb..",
+        "..bbb..",
+        "..ggg..",
+    ], depth: 2, palette: ["#": RGB(0.72, 0.78, 0.86), "h": RGB(1, 1, 1), "g": RGB(1, 0.8, 0.2), "b": RGB(0.55, 0.32, 0.15)],
+       glow: RGB(0.7, 0.85, 1), spin: 1.6)
+
+    static let star = extrude([
+        "....#....",
+        "....#....",
+        "...#h#...",
+        "#########",
+        ".#######.",
+        "..#####..",
+        "..##.##..",
+        ".##...##.",
+    ], depth: 3, palette: ["#": RGB(1, 0.85, 0.15), "h": RGB(1, 1, 0.75)], glow: RGB(1, 0.9, 0.3), spin: 2.1)
+
+    static let gem = extrude([
+        "..lll##..",
+        ".lll#####.",
+        "lll#######",
+        ".d#######.",
+        "..ddddd..",
+        "...ddd...",
+        "....d....",
+    ], depth: 4, palette: ["l": RGB(0.7, 0.97, 1), "#": RGB(0.3, 0.85, 1), "d": RGB(0.15, 0.55, 0.95)], glow: RGB(0.3, 0.85, 1), spin: 1.8)
+
+    static let potion = extrude([
+        "..ccc..",
+        "..ggg..",
+        "..ggg..",
+        ".ggggg.",
+        "gpppppg",
+        "gphpppg",
+        "gpppppg",
+        "gpppppg",
+        ".gpppg.",
+        "..ggg..",
+    ], depth: 4, palette: ["c": RGB(0.7, 0.5, 0.3), "g": RGB(0.75, 0.92, 1), "p": RGB(1, 0.3, 0.7), "h": RGB(1, 0.75, 0.9)],
+       glow: RGB(1, 0.35, 0.75), spin: 1.5)
+
+    static let key = extrude([
+        ".###...",
+        "##.##..",
+        "#...#..",
+        "##.##..",
+        ".###...",
+        "..#....",
+        "..#....",
+        "..##...",
+        "..#....",
+        "..##...",
+    ], depth: 2, palette: ["#": RGB(1, 0.82, 0.2)], glow: RGB(1, 0.8, 0.2), spin: 2.2)
+
+    /// Блок с вопросительным знаком — настоящий куб 8×8×8, у которого рисуется только оболочка
+    static let block: Model = {
+        let glyph = [".##.", "#..#", "..#.", ".#..", "....", ".#.."]
+        var voxels: [Voxel] = []
+        for x in 0..<8 {
+            for y in 0..<8 {
+                for z in 0..<8 {
+                    let onShell = x == 0 || x == 7 || y == 0 || y == 7 || z == 0 || z == 7
+                    guard onShell else { continue }
+                    let border = (x == 0 || x == 7) && (y == 0 || y == 7) || (x == 0 || x == 7) && (z == 0 || z == 7) || (y == 0 || y == 7) && (z == 0 || z == 7)
+                    var color = border ? RGB(0.75, 0.4, 0.1) : RGB(1, 0.78, 0.2)
+                    // «?» на лицевой (z = 0) и задней (z = 7) гранях
+                    if (z == 0 || z == 7), x >= 2, x <= 5, y >= 1, y <= 6 {
+                        let gx = z == 0 ? x - 2 : 5 - x
+                        let line = Array(glyph[y - 1])
+                        if line[gx] == "#" { color = RGB(0.45, 0.22, 0.05) }
+                    }
+                    voxels.append(Voxel(x: CGFloat(x) - 3.5, y: CGFloat(y) - 3.5, z: CGFloat(z) - 3.5, color: color))
+                }
+            }
+        }
+        return Model(voxels: voxels, glow: RGB(1, 0.75, 0.2), spin: 1.4)
+    }()
+
+    static let leftItems: [Model] = [coin, heart, sword, star]
+    static let rightItems: [Model] = [block, gem, potion, key]
+
+    /// Рисует модель, повёрнутую вокруг вертикальной оси: у каждого кубика видны лицевая и боковая грани
+    private static func render(_ model: Model, in context: inout GraphicsContext, center: CGPoint, voxel s: CGFloat, angle: Double, scale: CGFloat) {
+        let c = CGFloat(cos(angle)), sn = CGFloat(sin(angle))
+        let size = s * scale
+        var drawn: [(sx: CGFloat, sy: CGFloat, z: CGFloat, color: RGB)] = []
+        drawn.reserveCapacity(model.voxels.count)
+        for v in model.voxels {
+            let x = v.x * c + v.z * sn
+            let z = -v.x * sn + v.z * c
+            drawn.append((center.x + x * size, center.y + v.y * size, z, v.color))
+        }
+        // Дальние кубики первыми
+        drawn.sort { $0.z != $1.z ? $0.z < $1.z : $0.sy < $1.sy }
+
+        let frontW = abs(c) * size, sideW = abs(sn) * size
+        let total = frontW + sideW
+        let frontFactor = c >= 0 ? 1.0 : 0.7
+        let sideLeft = c * sn >= 0
+        for v in drawn {
+            let left = v.sx - total / 2
+            let top = v.sy - size / 2
+            let sideRect = CGRect(x: sideLeft ? left : left + frontW, y: top, width: sideW + 0.3, height: size + 0.3)
+            let frontRect = CGRect(x: sideLeft ? left + sideW : left, y: top, width: frontW + 0.3, height: size + 0.3)
+            if sideW > 0.05 { context.fill(Path(sideRect), with: .color(v.color.color(0.6))) }
+            if frontW > 0.05 { context.fill(Path(frontRect), with: .color(v.color.color(frontFactor))) }
+        }
+    }
+
+    /// Выпрыгивание: от нуля с лёгким «перелётом» до единицы
+    private static func pop(_ x: Double) -> CGFloat {
+        guard x < 1 else { return 1 }
+        let c1 = 1.70158, c3 = c1 + 1
+        return CGFloat(1 + c3 * pow(x - 1, 3) + c1 * pow(x - 1, 2))
+    }
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let duration = 7.0
+        for (index, zone) in [zones.left, zones.right].enumerated() {
+            let items = index == 0 ? leftItems : rightItems
+            let shifted = t + (index == 0 ? 0 : duration / 2)
+            let number = Int(floor(shifted / duration))
+            let local = shifted - Double(number) * duration
+            let model = items[((number % items.count) + items.count) % items.count]
+
+            // Появление и исчезновение: 0,6 секунды «выскакивание» в начале, сжатие в конце
+            var scale = pop(local / 0.6)
+            if local > duration - 0.35 { scale *= CGFloat(max(0, (duration - local) / 0.35)) }
+            guard scale > 0.02 else { continue }
+
+            let bob = CGFloat(sin(t * 2.1 + Double(index) * 1.5)) * 1.8
+            let center = CGPoint(x: zone.midX, y: h * 0.46 + bob)
+            let voxel: CGFloat = 2.3
+
+            // Свечение и тень на «полу»
+            context.fill(Path(ellipseIn: CGRect(x: center.x - 15, y: center.y - 15, width: 30, height: 30)),
+                         with: .radialGradient(Gradient(colors: [model.glow.color(1, opacity: 0.3 * Double(scale)), .clear]),
+                                               center: center, startRadius: 0, endRadius: 15))
+            let shadow = 9 * scale * (1 - bob * 0.04)
+            context.fill(Path(ellipseIn: CGRect(x: center.x - shadow, y: h - 4.5, width: shadow * 2, height: 3)),
+                         with: .color(.black.opacity(0.5)))
+            context.fill(Path(ellipseIn: CGRect(x: center.x - shadow * 0.8, y: h - 4.2, width: shadow * 1.6, height: 2.4)),
+                         with: .color(model.glow.color(0.55, opacity: 0.35)))
+
+            // Сердце ещё и пульсирует
+            var itemScale = scale
+            if model.voxels.count == heart.voxels.count && model.glow.r == heart.glow.r {
+                itemScale *= 1 + 0.08 * CGFloat(max(0, sin(t * 5.5)))
+            }
+            let angle = local * model.spin + Double(index) * 1.1
+            render(model, in: &context, center: center, voxel: voxel, angle: angle, scale: itemScale)
+
+            // Искорки: крестики мигают вокруг предмета
+            for k in 0..<4 {
+                let a = Double(k) * 1.6 + t * 0.6 + Double(index)
+                let twinkle = max(0, sin(t * 3.2 + Double(k) * 1.9 + Double(index) * 2))
+                guard twinkle > 0.15 else { continue }
+                let px = center.x + CGFloat(cos(a)) * 13
+                let py = center.y + CGFloat(sin(a)) * 12
+                let r = CGFloat(twinkle) * 2
+                var spark = Path()
+                spark.move(to: CGPoint(x: px - r, y: py)); spark.addLine(to: CGPoint(x: px + r, y: py))
+                spark.move(to: CGPoint(x: px, y: py - r)); spark.addLine(to: CGPoint(x: px, y: py + r))
+                context.stroke(spark, with: .color(.white.opacity(0.9 * Double(scale))), lineWidth: 0.8)
+            }
         }
     }
 }
