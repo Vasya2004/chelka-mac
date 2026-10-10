@@ -97,7 +97,7 @@ enum ClosedNotchLayout {
 
 /// Анимация закрытой «чёлки» в простое: нет ни работающих нейросетей, ни медиа
 enum IdleStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case off, cat, pong, fireflies, fish, snake, clock, chomp, matrix, rain, invaders, dino, blocks, puppy, fireworks, rocket, train, snow, robot, bats, tesla, ocean, jellyfish, runner
+    case off, cat, pong, fireflies, fish, snake, clock, chomp, matrix, rain, invaders, dino, blocks, puppy, fireworks, rocket, train, snow, robot, bats, tesla, ocean, jellyfish, runner, aurora, synthwave, whale, dragon, chase, equalizer
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -125,6 +125,12 @@ enum IdleStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
         case .ocean: return "Ocean"
         case .jellyfish: return "Jellyfish"
         case .runner: return "Coin runner"
+        case .aurora: return "Aurora"
+        case .synthwave: return "Synthwave"
+        case .whale: return "Whale"
+        case .dragon: return "Dragon"
+        case .chase: return "Cat & mouse"
+        case .equalizer: return "Equalizer"
         }
     }
 }
