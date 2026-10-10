@@ -65,6 +65,12 @@ struct IdleArt: View {
             case .portal: IdlePortal.draw(in: &context, zones: zones, t: t)
             case .spider: IdleSpider.draw(in: &context, zones: zones, t: t)
             case .waterFire: IdleWaterFire.draw(in: &context, zones: zones, t: t)
+            case .rocket: IdleRocket.draw(in: &context, zones: zones, t: t)
+            case .dvd: IdleScreensaver.draw(in: &context, zones: zones, t: t)
+            case .train: IdleTrain.draw(in: &context, zones: zones, t: t)
+            case .sushi: IdleSushi.draw(in: &context, zones: zones, t: t)
+            case .orbit: IdleOrbit.draw(in: &context, zones: zones, t: t)
+            case .snow: IdleSnow.draw(in: &context, zones: zones, t: t)
             }
         }
     }
@@ -1505,5 +1511,349 @@ private enum IdleWaterFire {
                 context.fill(Path(CGRect(x: x, y: y, width: 1.4, height: 1.4)), with: .color(inner.opacity(1 - phase)))
             }
         }
+    }
+}
+
+/// Положительный остаток от деления (для бегущих по кругу узоров)
+private func idleWrap(_ value: Double, _ period: Double) -> Double {
+    let r = value.truncatingRemainder(dividingBy: period)
+    return r < 0 ? r + period : r
+}
+
+// MARK: - Ракета
+
+/// Звёзды плывут мимо тремя слоями, время от времени ракета с пламенем пролетает сквозь чёлку (в одну сторону, потом в другую)
+private enum IdleRocket {
+    static let ship = Sprite(rows: [
+        "..##....",
+        "#####...",
+        "#########",
+        "#####..o.",
+        "..##....",
+    ])
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        // Звёзды: чем дальше слой, тем медленнее и тусклее
+        for layer in 0..<3 {
+            let speed = [5.0, 11.0, 21.0][layer]
+            for i in 0..<10 {
+                let seed = layer * 20 + i + 1
+                let x = idleWrap(idleRandom(seed) * w - t * speed, w)
+                let y = h * (0.1 + 0.8 * idleRandom(seed + 99))
+                let twinkle = 0.55 + 0.45 * sin(t * 3 + Double(seed))
+                let size: CGFloat = layer == 2 ? 1.6 : 1.1
+                context.fill(Path(CGRect(x: x, y: y, width: size, height: size)),
+                             with: .color(.white.opacity((0.25 + 0.25 * Double(layer)) * twinkle)))
+            }
+        }
+
+        // Ракета: пролёт 3 секунды, цикл 10 с, лететь по очереди то вправо, то влево
+        let period = 10.0
+        let number = Int(floor(t / period))
+        let local = t - Double(number) * period
+        guard local < 3.2 else { return }
+        let rightward = number % 2 == 0
+        let p = CGFloat(local / 3.2)
+        let progress = rightward ? p : 1 - p
+        let x = -14 + (w + 28) * progress
+        let y = h * 0.5 + CGFloat(sin(t * 6)) * 1.1
+        let dir: CGFloat = rightward ? 1 : -1
+        // Пламя сзади: длина мерцает
+        let flame = 5 + CGFloat(abs(sin(t * 40))) * 3
+        context.fill(Path(CGRect(x: rightward ? x - 9 - flame : x + 9, y: y - 1.5, width: flame, height: 3)),
+                     with: .color(Color(red: 1, green: 0.5, blue: 0.12)))
+        context.fill(Path(CGRect(x: rightward ? x - 9 - flame * 0.55 : x + 9, y: y - 0.8, width: flame * 0.55, height: 1.6)),
+                     with: .color(Color(red: 1, green: 0.9, blue: 0.4)))
+        // Искры от двигателя
+        for k in 0..<4 {
+            let sx = x - dir * (10 + CGFloat(k) * 4 + CGFloat(idleRandom(Int(t * 10) + k) * 3))
+            context.fill(Path(CGRect(x: sx, y: y + CGFloat(idleRandom(k + 7) - 0.5) * 6, width: 1.2, height: 1.2)),
+                         with: .color(Color(red: 1, green: 0.7, blue: 0.3).opacity(0.7 - Double(k) * 0.15)))
+        }
+        ship.draw(in: &context, x: x, bottom: y + 4, pixel: 1.6, color: Color(white: 0.92),
+                  accent: Color(red: 0.4, green: 0.85, blue: 1), flip: !rightward)
+    }
+}
+
+// MARK: - Заставка
+
+/// Как заставка старого DVD-плеера: надпись «CHELKA» летает по всему экрану, отскакивает от краёв (в том числе за чёлкой) и меняет цвет
+private enum IdleScreensaver {
+    static let colors: [Color] = [
+        Color(red: 1, green: 0.35, blue: 0.5), Color(red: 0.4, green: 0.85, blue: 1), Color(red: 0.55, green: 1, blue: 0.5),
+        Color(red: 1, green: 0.85, blue: 0.3), Color(red: 0.8, green: 0.55, blue: 1), Color(red: 1, green: 0.6, blue: 0.25),
+    ]
+
+    private static func triangle(_ v: Double) -> Double { 1 - abs(idleWrap(v, 2) - 1) }
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let measure = context.resolve(Text("CHELKA").font(.system(size: 9, weight: .heavy, design: .rounded)))
+        let size = measure.measure(in: CGSize(width: 200, height: 40))
+        let rangeX = Double(w - size.width)
+        let rangeY = Double(h - size.height)
+        guard rangeX > 1, rangeY > 1 else { return }
+        let dx = t * 31 / rangeX
+        let dy = t * 14.5 / rangeY
+        let x = CGFloat(triangle(dx) * rangeX)
+        let y = CGFloat(triangle(dy) * rangeY)
+        // Каждое отражение от края — новый цвет
+        let color = colors[(Int(floor(dx)) + Int(floor(dy))) % colors.count]
+        let text = Text("CHELKA").font(.system(size: 9, weight: .heavy, design: .rounded)).foregroundColor(color)
+        context.draw(text, at: CGPoint(x: x, y: y), anchor: .topLeading)
+        // Слабое свечение вокруг надписи
+        context.fill(Path(roundedRect: CGRect(x: x - 2, y: y - 1, width: size.width + 4, height: size.height + 2), cornerRadius: 4),
+                     with: .color(color.opacity(0.1)))
+    }
+}
+
+// MARK: - Поезд
+
+/// Чёлка — тоннель: паровозик с вагончиками выезжает из-за чёлки, пыхтит дымом и уезжает в тоннель с другой стороны
+private enum IdleTrain {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let ground = h - 5
+
+        // Рельсы и шпалы
+        for zone in [zones.left, zones.right] {
+            context.fill(Path(CGRect(x: zone.minX, y: ground, width: zone.width, height: 1)), with: .color(.white.opacity(0.4)))
+            var x = zone.minX + 1
+            while x < zone.maxX {
+                context.fill(Path(CGRect(x: x, y: ground + 1, width: 1.3, height: 1.8)), with: .color(Color(red: 0.55, green: 0.4, blue: 0.25).opacity(0.7)))
+                x += 4
+            }
+        }
+
+        let period = 13.0
+        let run = 6.4
+        let number = Int(floor(t / period))
+        let local = t - Double(number) * period
+        guard local < run else { return }
+
+        // Нечётные проезды — в обратную сторону: рисуем то же самое, отразив холст
+        var layer = context
+        if number % 2 == 1 {
+            layer.translateBy(x: w, y: 0)
+            layer.scaleBy(x: -1, y: 1)
+        }
+        let length: CGFloat = 54
+        let head = -6 + (w + length + 12) * CGFloat(local / run)
+        let red = Color(red: 0.9, green: 0.25, blue: 0.22)
+        let dark = Color(red: 0.55, green: 0.12, blue: 0.12)
+
+        // Дым из трубы: клубы остаются позади, растут и тают
+        for k in 0..<7 {
+            let age = Double(k) * 0.16 + idleWrap(t * 2.5, 0.16)
+            let px = head - 3 - CGFloat(age) * 26
+            let py = ground - 15 - CGFloat(age) * 9
+            let r = 1.6 + CGFloat(age) * 2.2
+            layer.fill(Path(ellipseIn: CGRect(x: px - r, y: py - r, width: r * 2, height: r * 2)),
+                       with: .color(Color(white: 0.9).opacity(0.5 * max(0, 1 - age / 1.1))))
+        }
+        // Паровоз
+        layer.fill(Path(CGRect(x: head - 17, y: ground - 10, width: 17, height: 6)), with: .color(red))
+        layer.fill(Path(CGRect(x: head - 17, y: ground - 15, width: 7, height: 5)), with: .color(dark))
+        layer.fill(Path(CGRect(x: head - 5, y: ground - 14, width: 3.5, height: 4)), with: .color(Color(white: 0.2)))
+        layer.fill(Path(ellipseIn: CGRect(x: head - 1.8, y: ground - 8.4, width: 2.6, height: 2.6)), with: .color(Color(red: 1, green: 0.9, blue: 0.4)))
+        // Вагончики
+        let wagonColors = [Color(red: 0.3, green: 0.6, blue: 1), Color(red: 0.4, green: 0.85, blue: 0.5), Color(red: 1, green: 0.75, blue: 0.25)]
+        for k in 0..<3 {
+            let wx = head - 19 - CGFloat(k) * 13
+            layer.fill(Path(CGRect(x: wx - 11.5, y: ground - 9, width: 11.5, height: 5)), with: .color(wagonColors[k]))
+            layer.fill(Path(CGRect(x: wx - 1.5, y: ground - 7, width: 2.2, height: 1)), with: .color(Color(white: 0.7)))
+            for dx in [-8.0, -3.0] {
+                layer.fill(Path(ellipseIn: CGRect(x: wx + CGFloat(dx) - 1.6, y: ground - 3.2, width: 3.2, height: 3.2)), with: .color(Color(white: 0.15)))
+            }
+        }
+        // Колёса паровоза с бегущей спицей
+        for dx in [-14.0, -8.0, -2.5] {
+            let cx = head + CGFloat(dx)
+            layer.fill(Path(ellipseIn: CGRect(x: cx - 2.2, y: ground - 4.4, width: 4.4, height: 4.4)), with: .color(Color(white: 0.15)))
+            let a = t * 14
+            var spoke = Path()
+            spoke.move(to: CGPoint(x: cx, y: ground - 2.2))
+            spoke.addLine(to: CGPoint(x: cx + CGFloat(cos(a)) * 1.8, y: ground - 2.2 + CGFloat(sin(a)) * 1.8))
+            layer.stroke(spoke, with: .color(.white.opacity(0.8)), lineWidth: 0.7)
+        }
+    }
+}
+
+// MARK: - Суши-лента
+
+/// Конвейер суши: тарелки с роллами и нигири плывут мимо, скрываются за чёлкой и выезжают с другой стороны
+private enum IdleSushi {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let beltY = h - 6
+        // Лента с бегущими штрихами
+        context.fill(Path(CGRect(x: 0, y: beltY, width: w, height: 3)), with: .color(Color(white: 0.2)))
+        var dash = -idleWrap(t * 16, 6)
+        while dash < w {
+            context.fill(Path(CGRect(x: dash, y: beltY + 1.2, width: 3, height: 0.8)), with: .color(Color(white: 0.45)))
+            dash += 6
+        }
+
+        let spacing = 33.0
+        let count = Int(Double(w) / spacing) + 2
+        let shift = t * 16
+        for i in 0..<count {
+            let raw = Double(i) * spacing + shift
+            let x = CGFloat(idleWrap(raw, Double(count) * spacing)) - CGFloat(spacing)
+            guard x > -10, x < w + 10 else { continue }
+            let kind = (Int(floor(raw / (Double(count) * spacing))) * 3 + i) % 4
+            plate(in: &context, x: x, y: beltY, kind: kind, t: t)
+        }
+    }
+
+    private static func plate(in context: inout GraphicsContext, x: CGFloat, y: CGFloat, kind: Int, t: Double) {
+        // Тарелка
+        context.fill(Path(ellipseIn: CGRect(x: x - 7, y: y - 2.2, width: 14, height: 3.4)), with: .color(Color(white: 0.92)))
+        context.fill(Path(ellipseIn: CGRect(x: x - 5, y: y - 1.6, width: 10, height: 2)), with: .color(Color(white: 0.78)))
+        switch kind {
+        case 0, 1:
+            // Нигири: рис и ломтик сверху (лосось или тунец)
+            context.fill(Path(roundedRect: CGRect(x: x - 4, y: y - 6, width: 8, height: 4), cornerRadius: 2), with: .color(.white))
+            let topping = kind == 0 ? Color(red: 1, green: 0.55, blue: 0.3) : Color(red: 0.9, green: 0.2, blue: 0.3)
+            context.fill(Path(roundedRect: CGRect(x: x - 4.6, y: y - 8.2, width: 9.2, height: 3), cornerRadius: 1.5), with: .color(topping))
+            context.fill(Path(CGRect(x: x - 2.5, y: y - 7.6, width: 5, height: 0.7)), with: .color(.white.opacity(0.35)))
+        case 2:
+            // Ролл: нори, рис и начинка
+            context.fill(Path(ellipseIn: CGRect(x: x - 3.6, y: y - 8.2, width: 7.2, height: 7.2)), with: .color(Color(red: 0.1, green: 0.25, blue: 0.15)))
+            context.fill(Path(ellipseIn: CGRect(x: x - 2.4, y: y - 7, width: 4.8, height: 4.8)), with: .color(.white))
+            context.fill(Path(ellipseIn: CGRect(x: x - 1, y: y - 5.6, width: 2, height: 2)), with: .color(Color(red: 1, green: 0.5, blue: 0.2)))
+        default:
+            // Яичный тамаго с полоской нори
+            context.fill(Path(roundedRect: CGRect(x: x - 4, y: y - 6.4, width: 8, height: 4.4), cornerRadius: 1), with: .color(Color(red: 1, green: 0.85, blue: 0.35)))
+            context.fill(Path(CGRect(x: x - 1.2, y: y - 6.6, width: 2.4, height: 4.8)), with: .color(Color(red: 0.1, green: 0.25, blue: 0.15)))
+        }
+    }
+}
+
+// MARK: - Планеты
+
+/// Чёлка — звезда: вокруг неё по эллипсам вращаются планеты (с лунами и кольцами) и уходят за неё
+private enum IdleOrbit {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let center = CGPoint(x: w / 2, y: h / 2)
+
+        // Орбиты — едва заметные эллипсы
+        let orbits: [(rx: CGFloat, ry: CGFloat)] = [(104, 12), (90, 9), (76, 6)]
+        for orbit in orbits {
+            context.stroke(Path(ellipseIn: CGRect(x: center.x - orbit.rx, y: center.y - orbit.ry, width: orbit.rx * 2, height: orbit.ry * 2)),
+                           with: .color(.white.opacity(0.08)), style: StrokeStyle(lineWidth: 0.6, dash: [2, 3]))
+        }
+
+        func point(_ orbit: (rx: CGFloat, ry: CGFloat), _ angle: Double) -> CGPoint {
+            CGPoint(x: center.x + orbit.rx * CGFloat(cos(angle)), y: center.y + orbit.ry * CGFloat(sin(angle)))
+        }
+
+        // Земля с луной, Марс, Сатурн: у каждой своя скорость; ближе к зрителю (внизу эллипса) крупнее
+        let earthAngle = t * 0.5
+        let marsAngle = t * 0.85 + 2.1
+        let saturnAngle = t * 0.33 + 4.2
+        for (orbit, angle, color, radius) in [
+            (orbits[2], marsAngle, Color(red: 1, green: 0.5, blue: 0.25), 2.3),
+            (orbits[1], earthAngle, Color(red: 0.3, green: 0.6, blue: 1), 3.2),
+            (orbits[0], saturnAngle, Color(red: 0.95, green: 0.8, blue: 0.5), 3.4),
+        ] {
+            let p = point(orbit, angle)
+            // Хвост из затухающих точек
+            for k in 1...5 {
+                let tp = point(orbit, angle - Double(k) * 0.07)
+                context.fill(Path(ellipseIn: CGRect(x: tp.x - 0.8, y: tp.y - 0.8, width: 1.6, height: 1.6)),
+                             with: .color(color.opacity(0.35 - Double(k) * 0.06)))
+            }
+            let depth = CGFloat(0.85 + 0.25 * sin(angle))
+            let r = CGFloat(radius) * depth
+            context.fill(Path(ellipseIn: CGRect(x: p.x - r * 2, y: p.y - r * 2, width: r * 4, height: r * 4)),
+                         with: .radialGradient(Gradient(colors: [color.opacity(0.28), .clear]), center: p, startRadius: 0, endRadius: r * 2))
+            context.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(color))
+            if radius == 3.4 {
+                // Кольцо Сатурна
+                context.stroke(Path(ellipseIn: CGRect(x: p.x - r * 1.9, y: p.y - r * 0.55, width: r * 3.8, height: r * 1.1)),
+                               with: .color(Color(red: 1, green: 0.9, blue: 0.7).opacity(0.85)), lineWidth: 0.8)
+            }
+            if radius == 3.2 {
+                // Зелёные континенты и крошечная луна вокруг Земли
+                context.fill(Path(ellipseIn: CGRect(x: p.x - r * 0.5, y: p.y - r * 0.4, width: r * 0.8, height: r * 0.6)), with: .color(Color(red: 0.4, green: 0.85, blue: 0.5)))
+                let moon = CGPoint(x: p.x + CGFloat(cos(t * 3)) * 6.5, y: p.y + CGFloat(sin(t * 3)) * 3)
+                context.fill(Path(ellipseIn: CGRect(x: moon.x - 1, y: moon.y - 1, width: 2, height: 2)), with: .color(Color(white: 0.85)))
+            }
+        }
+    }
+}
+
+// MARK: - Снегопад
+
+/// Падает снег и копится сугробами по бокам; слева стоит снеговик, справа ёлка. Раз в 28 секунд всё тает и начинается заново
+private enum IdleSnow {
+    static let snowman = Sprite(rows: [
+        "..###..",
+        ".#-#-#.",
+        "..#o#..",
+        ".#####.",
+        "#######",
+        "#######",
+        ".#####.",
+    ])
+    static let tree = Sprite(rows: [
+        "...#...",
+        "..###..",
+        "..###..",
+        ".#####.",
+        ".#####.",
+        "#######",
+        "...-...",
+    ])
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let cycle = 28.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        // Сугроб растёт 20 секунд и тает последние 5
+        let growth = CGFloat(min(1, local / 20))
+        let melt = CGFloat(max(0, (local - 23) / 5))
+        let pile = (1.2 + 5 * growth) * (1 - melt)
+
+        for (index, zone) in [zones.left, zones.right].enumerated() {
+            // Сугроб: холмики разной высоты
+            var path = Path()
+            path.move(to: CGPoint(x: zone.minX, y: h))
+            let steps = 8
+            for i in 0...steps {
+                let x = zone.minX + zone.width * CGFloat(i) / CGFloat(steps)
+                let bump = CGFloat(0.55 + 0.45 * sin(Double(i) * 1.7 + Double(index) * 2))
+                path.addLine(to: CGPoint(x: x, y: h - pile * bump - 0.5))
+            }
+            path.addLine(to: CGPoint(x: zone.maxX, y: h))
+            path.closeSubpath()
+            context.fill(path, with: .color(Color(white: 0.95).opacity(0.95)))
+
+            // Снежинки
+            for i in 0..<14 {
+                let seed = Double(index * 14 + i) + 1
+                let speed = 7 + 7 * idleRandom(Int(seed) + 50)
+                let y = CGFloat(idleWrap(t * speed + seed * 9, Double(h) + 6)) - 3
+                let x = zone.minX + zone.width * CGFloat(idleRandom(Int(seed)))
+                    + CGFloat(sin(t * 0.9 + seed)) * 3
+                let size: CGFloat = 0.9 + CGFloat(idleRandom(Int(seed) + 80)) * 1.0
+                context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: size, height: size)), with: .color(.white.opacity(0.85)))
+            }
+        }
+
+        // Снеговик слева и ёлка справа сидят на сугробе
+        let base = h - pile * 0.5 - 0.5
+        snowman.draw(in: &context, x: zones.left.midX - 2, bottom: base, pixel: 1.6, color: .white,
+                     accent: Color(red: 1, green: 0.55, blue: 0.2), flip: false, dark: Color(white: 0.15))
+        tree.draw(in: &context, x: zones.right.midX + 2, bottom: base, pixel: 1.6, color: Color(red: 0.25, green: 0.75, blue: 0.4),
+                  accent: .white, flip: false, dark: Color(red: 0.5, green: 0.32, blue: 0.15))
     }
 }
