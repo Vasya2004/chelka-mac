@@ -1822,80 +1822,228 @@ private enum IdleSynthwave {
     }
 }
 
-// MARK: - Кит
+// MARK: - Рифовый аквариум
 
-/// Кит неторопливо плывёт под водой сквозь чёлку, выпускает фонтан и оставляет пузырьки; обратно плывёт зеркально
+/// Настоящий аквариум: свет пробивается сквозь воду, колышутся водоросли, растёт коралл, на дне сундук выпускает пузырьки;
+/// стайки рыбок разных видов плывут в обе стороны сквозь чёлку, а раз в 44 секунды неторопливо проплывает кит
 private enum IdleWhale {
+    private static func fish(_ context: inout GraphicsContext, x: CGFloat, y: CGFloat, size s: CGFloat, direction: CGFloat, t: Double, seed: Double,
+                             body: Color, fin: Color, stripes: Color? = nil) {
+        var layer = context
+        layer.translateBy(x: x, y: y)
+        layer.scaleBy(x: direction, y: 1)
+        let wag = CGFloat(sin(t * 9 + seed)) * 1.1 * s
+        // Хвост
+        layer.fill(Path { p in
+            p.move(to: CGPoint(x: -3 * s, y: 0)); p.addLine(to: CGPoint(x: -6.2 * s, y: -2.3 * s + wag)); p.addLine(to: CGPoint(x: -6.2 * s, y: 2.3 * s + wag)); p.closeSubpath()
+        }, with: .color(fin))
+        // Спинной плавник
+        layer.fill(Path { p in
+            p.move(to: CGPoint(x: -1.5 * s, y: -1.8 * s)); p.addLine(to: CGPoint(x: 0.5 * s, y: -3.4 * s)); p.addLine(to: CGPoint(x: 1.6 * s, y: -1.8 * s)); p.closeSubpath()
+        }, with: .color(fin))
+        let bodyRect = CGRect(x: -3.6 * s, y: -2.1 * s, width: 7.6 * s, height: 4.2 * s)
+        layer.fill(Path(ellipseIn: bodyRect), with: .color(body))
+        if let stripes {
+            var clipped = layer
+            clipped.clip(to: Path(ellipseIn: bodyRect))
+            for dx in [-1.3, 1.6] {
+                clipped.fill(Path(CGRect(x: CGFloat(dx) * s - 0.5 * s, y: -3 * s, width: 1 * s, height: 6 * s)), with: .color(stripes))
+            }
+        }
+        layer.fill(Path(ellipseIn: CGRect(x: 1.9 * s, y: -1.1 * s, width: 1.2 * s, height: 1.2 * s)), with: .color(.white))
+        layer.fill(Path(ellipseIn: CGRect(x: 2.3 * s, y: -0.8 * s, width: 0.7 * s, height: 0.7 * s)), with: .color(.black))
+    }
+
+    /// Стайка: рыбки идут «клином» через весь аквариум и обратно по кругу
+    private static func school(_ context: inout GraphicsContext, w: CGFloat, h: CGFloat, t: Double, count: Int, size: CGFloat, speed: Double,
+                               depth: CGFloat, rightward: Bool, phase: Double, body: Color, fin: Color, stripes: Color? = nil) {
+        let span = Double(w) + 90
+        let progress = idleWrap(t * speed / span + phase, 1)
+        for i in 0..<count {
+            let lead = Double(i) * 8 / span
+            let p = idleWrap(progress - lead, 1)
+            let x = CGFloat(rightward ? p : 1 - p) * CGFloat(span) - 45
+            let y = h * depth + CGFloat(sin(t * 1.4 + Double(i) * 1.7 + phase * 9)) * 2.2 + CGFloat(i % 2) * 3.5
+            fish(&context, x: x, y: y, size: size, direction: rightward ? 1 : -1, t: t, seed: Double(i) * 1.3 + phase * 7, body: body, fin: fin, stripes: stripes)
+        }
+    }
+
     static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
         let w = zones.size.width
         let h = zones.size.height
 
-        // Поверхность воды сверху и свет, пробивающийся вниз
+        // Вода: бирюзовая сверху, тёмно-синяя внизу
+        context.fill(Path(CGRect(x: 0, y: 0, width: w, height: h)),
+                     with: .linearGradient(Gradient(colors: [Color(red: 0.12, green: 0.55, blue: 0.75).opacity(0.55), Color(red: 0.03, green: 0.14, blue: 0.3).opacity(0.85)]),
+                                           startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: 0, y: h)))
+        // Лучи света, медленно покачиваются
+        for k in 0..<5 {
+            let x = w * CGFloat(k) / 4 + CGFloat(sin(t * 0.35 + Double(k))) * 6
+            context.fill(Path { p in
+                p.move(to: CGPoint(x: x - 3, y: 0)); p.addLine(to: CGPoint(x: x + 3, y: 0))
+                p.addLine(to: CGPoint(x: x + 13, y: h)); p.addLine(to: CGPoint(x: x + 1, y: h)); p.closeSubpath()
+            }, with: .linearGradient(Gradient(colors: [.white.opacity(0.16), .white.opacity(0)]), startPoint: CGPoint(x: x, y: 0), endPoint: CGPoint(x: x + 6, y: h)))
+        }
+
+        // Кит: раз в 44 секунды, проплывает 20 секунд, дальше всех, на заднем плане
+        let period = 44.0
+        let number = Int(floor(t / period))
+        let local = t - Double(number) * period
+        if local < 20 {
+            let rightward = number % 2 == 0
+            let p = CGFloat(local / 20)
+            let cx = CGFloat(rightward ? p : 1 - p) * (w + 80) - 40
+            let cy = h * 0.38 + CGFloat(sin(t * 0.9)) * 2.5
+            var layer = context
+            layer.translateBy(x: cx, y: cy)
+            layer.scaleBy(x: rightward ? 0.8 : -0.8, y: 0.8)
+            let skin = Color(red: 0.26, green: 0.38, blue: 0.62)
+            let tail = CGFloat(sin(t * 2.2)) * 3
+            layer.fill(Path { p in
+                p.move(to: CGPoint(x: -12, y: 0))
+                p.addQuadCurve(to: CGPoint(x: -21, y: -6 + tail), control: CGPoint(x: -17, y: -2 + tail * 0.5))
+                p.addQuadCurve(to: CGPoint(x: -19, y: 0 + tail * 0.5), control: CGPoint(x: -19, y: -2 + tail))
+                p.addQuadCurve(to: CGPoint(x: -21, y: 6 + tail), control: CGPoint(x: -19, y: 2 + tail))
+                p.addQuadCurve(to: CGPoint(x: -12, y: 1), control: CGPoint(x: -16, y: 2 + tail * 0.5))
+                p.closeSubpath()
+            }, with: .color(skin))
+            layer.fill(Path(ellipseIn: CGRect(x: -16, y: -6.5, width: 32, height: 13)), with: .color(skin))
+            layer.fill(Path(ellipseIn: CGRect(x: -12, y: 0, width: 26, height: 6)), with: .color(Color(red: 0.7, green: 0.8, blue: 0.92)))
+            layer.fill(Path(ellipseIn: CGRect(x: 9, y: -2.6, width: 2, height: 2)), with: .color(.white))
+            layer.fill(Path(ellipseIn: CGRect(x: 9.6, y: -2.2, width: 1.1, height: 1.1)), with: .color(.black))
+        }
+
+        // Водоросли: пучки у обеих сторон, качаются в такт течению
+        let weeds: [(CGFloat, CGFloat)] = [(0.14, 15), (0.3, 20), (0.5, 12), (0.72, 17), (0.88, 14)]
+        for (index, (fx, height)) in weeds.enumerated() {
+            let zone = fx < 0.5 ? zones.left : zones.right
+            let x = zone.minX + zone.width * (fx < 0.5 ? fx * 2 : (fx - 0.5) * 2)
+            var strand = Path()
+            strand.move(to: CGPoint(x: x, y: h - 3))
+            for step in 1...6 {
+                let k = CGFloat(step) / 6
+                strand.addLine(to: CGPoint(x: x + CGFloat(sin(t * 1.6 + Double(index) * 1.4 + Double(k) * 2.2)) * 3.2 * k, y: h - 3 - height * k))
+            }
+            context.stroke(strand, with: .color(Color(red: 0.15 + 0.1 * Double(index % 2), green: 0.65, blue: 0.35).opacity(0.9)), lineWidth: 1.8)
+        }
+
+        // Стайки: оранжевые клоуны, синие хирурги, ангелы и неоновые тетры — у каждой своя глубина, скорость и сторона
+        school(&context, w: w, h: h, t: t, count: 6, size: 0.5, speed: 26, depth: 0.45, rightward: false, phase: 0.2,
+               body: Color(red: 0.3, green: 0.9, blue: 1), fin: Color(red: 1, green: 0.3, blue: 0.3))
+        school(&context, w: w, h: h, t: t, count: 4, size: 0.85, speed: 20, depth: 0.3, rightward: false, phase: 0.55,
+               body: Color(red: 0.2, green: 0.5, blue: 1), fin: Color(red: 1, green: 0.85, blue: 0.2))
+        school(&context, w: w, h: h, t: t, count: 3, size: 1.15, speed: 14, depth: 0.55, rightward: true, phase: 0.1,
+               body: Color(red: 1, green: 0.5, blue: 0.1), fin: Color(red: 1, green: 0.6, blue: 0.15), stripes: Color.white.opacity(0.95))
+        school(&context, w: w, h: h, t: t, count: 2, size: 1.35, speed: 9, depth: 0.62, rightward: true, phase: 0.62,
+               body: Color(red: 1, green: 0.88, blue: 0.3), fin: Color(red: 0.4, green: 0.7, blue: 1), stripes: Color(red: 0.2, green: 0.2, blue: 0.5).opacity(0.8))
+
+        // Иглобрюх: то раздувается, то сдувается
+        let pufferProgress = CGFloat(idleWrap(t / 34, 1))
+        let pufferX = pufferProgress * (w + 40) - 20
+        let inflate = CGFloat(max(0, sin(t * 0.7))) * 0.45
+        let pr = 3 * (1 + inflate)
+        let py = h * 0.4 + CGFloat(sin(t * 1.1)) * 2
+        if inflate > 0.2 {
+            for k in 0..<8 {
+                let a = Double(k) / 8 * 2 * .pi
+                var spike = Path()
+                spike.move(to: CGPoint(x: pufferX + CGFloat(cos(a)) * pr, y: py + CGFloat(sin(a)) * pr))
+                spike.addLine(to: CGPoint(x: pufferX + CGFloat(cos(a)) * (pr + 1.5), y: py + CGFloat(sin(a)) * (pr + 1.5)))
+                context.stroke(spike, with: .color(Color(red: 0.8, green: 0.65, blue: 0.2)), lineWidth: 0.7)
+            }
+        }
+        context.fill(Path(ellipseIn: CGRect(x: pufferX - pr, y: py - pr, width: pr * 2, height: pr * 2)), with: .color(Color(red: 0.95, green: 0.8, blue: 0.35)))
+        context.fill(Path(ellipseIn: CGRect(x: pufferX - pr * 0.6, y: py, width: pr * 1.6, height: pr * 0.8)), with: .color(Color(red: 1, green: 0.95, blue: 0.75)))
+        context.fill(Path(ellipseIn: CGRect(x: pufferX + pr * 0.25, y: py - pr * 0.45, width: 1.4, height: 1.4)), with: .color(.black))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: pufferX - pr, y: py)); p.addLine(to: CGPoint(x: pufferX - pr - 2.4, y: py - 1.6 + CGFloat(sin(t * 10)) * 0.8))
+            p.addLine(to: CGPoint(x: pufferX - pr - 2.4, y: py + 1.6 + CGFloat(sin(t * 10)) * 0.8)); p.closeSubpath()
+        }, with: .color(Color(red: 0.95, green: 0.7, blue: 0.25)))
+
+        // Дно: песок, камешки, коралл и актиния слева, морская звезда, сундук с пузырьками справа
+        for (index, zone) in [zones.left, zones.right].enumerated() {
+            idleMound(&context, zone: zone, h: h, pile: 3.2, color: Color(red: 0.86, green: 0.74, blue: 0.5), shift: Double(index) * 2)
+            for k in 0..<5 {
+                let px = zone.minX + 3 + zone.width * CGFloat(idleRandom(index * 5 + k + 700)) * 0.92
+                context.fill(Path(ellipseIn: CGRect(x: px, y: h - 2, width: 1.8, height: 1.2)), with: .color(Color(white: 0.55).opacity(0.8)))
+            }
+        }
+        // Коралл (слева): ветвистый, розовый
+        let cx = zones.left.midX + 7
+        var coral = Path()
+        for (dx, topY) in [(-4.0, 13.0), (0.0, 17.0), (4.0, 11.0)] {
+            coral.move(to: CGPoint(x: cx + CGFloat(dx) * 0.5, y: h - 3))
+            coral.addQuadCurve(to: CGPoint(x: cx + CGFloat(dx), y: h - 3 - CGFloat(topY)), control: CGPoint(x: cx + CGFloat(dx) * 1.4, y: h - 3 - CGFloat(topY) * 0.5))
+        }
+        context.stroke(coral, with: .color(Color(red: 1, green: 0.4, blue: 0.55)), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+        for (dx, topY) in [(-4.0, 13.0), (0.0, 17.0), (4.0, 11.0)] {
+            context.fill(Path(ellipseIn: CGRect(x: cx + CGFloat(dx) - 1.6, y: h - 3 - CGFloat(topY) - 1.6, width: 3.2, height: 3.2)), with: .color(Color(red: 1, green: 0.6, blue: 0.7)))
+        }
+        // Актиния рядом: щупальца машут
+        let ax = zones.left.midX - 8
+        for k in 0..<6 {
+            let dx = CGFloat(k - 3) * 1.3 + 0.6
+            var tentacle = Path()
+            tentacle.move(to: CGPoint(x: ax + dx, y: h - 3))
+            tentacle.addQuadCurve(to: CGPoint(x: ax + dx * 1.7 + CGFloat(sin(t * 2.5 + Double(k))) * 1.4, y: h - 10),
+                                  control: CGPoint(x: ax + dx * 1.2, y: h - 6.5))
+            context.stroke(tentacle, with: .color(Color(red: 0.95, green: 0.5, blue: 0.2)), lineWidth: 1.1)
+        }
+        // Морская звезда
+        var star = Path()
+        let sx = zones.right.midX - 9
+        for k in 0..<10 {
+            let a = Double(k) / 10 * 2 * .pi - .pi / 2
+            let r: CGFloat = k % 2 == 0 ? 3.4 : 1.4
+            let point = CGPoint(x: sx + CGFloat(cos(a)) * r, y: h - 4.5 + CGFloat(sin(a)) * r)
+            if k == 0 { star.move(to: point) } else { star.addLine(to: point) }
+        }
+        star.closeSubpath()
+        context.fill(star, with: .color(Color(red: 1, green: 0.45, blue: 0.3)))
+        // Сундук: крышка приоткрывается, оттуда летят пузырьки и блеск
+        let chestX = zones.right.midX + 6
+        let chestPhase = t.truncatingRemainder(dividingBy: 9)
+        let open = chestPhase > 5 && chestPhase < 8 ? CGFloat(sin(.pi * (chestPhase - 5) / 3)) : 0
+        context.fill(Path(roundedRect: CGRect(x: chestX - 5, y: h - 9, width: 10, height: 6), cornerRadius: 1), with: .color(Color(red: 0.55, green: 0.33, blue: 0.15)))
+        context.fill(Path(CGRect(x: chestX - 5, y: h - 6.5, width: 10, height: 1)), with: .color(Color(red: 1, green: 0.8, blue: 0.2)))
+        var lid = context
+        lid.translateBy(x: chestX - 5, y: h - 9)
+        lid.rotate(by: .radians(Double(-0.7 * open)))
+        lid.fill(Path(roundedRect: CGRect(x: 0, y: -3, width: 10, height: 3), cornerRadius: 1), with: .color(Color(red: 0.65, green: 0.4, blue: 0.18)))
+        lid.fill(Path(CGRect(x: 0, y: -1.8, width: 10, height: 0.9)), with: .color(Color(red: 1, green: 0.8, blue: 0.2)))
+        if open > 0.1 {
+            context.fill(Path(ellipseIn: CGRect(x: chestX - 4, y: h - 12, width: 8, height: 5)), with: .color(Color(red: 1, green: 0.85, blue: 0.3).opacity(Double(0.6 * open))))
+        }
+
+        // Пузырьки: от камня-аэратора слева и из сундука справа
+        for k in 0..<6 {
+            let phase = idleWrap(t * 0.7 + Double(k) / 6, 1)
+            let bx = zones.left.minX + 5 + CGFloat(sin(phase * 8 + Double(k))) * 1.6
+            let by = h - 4 - CGFloat(phase) * (h - 6)
+            let r = 0.9 + CGFloat(phase) * 0.9
+            context.stroke(Path(ellipseIn: CGRect(x: bx - r, y: by - r, width: r * 2, height: r * 2)), with: .color(.white.opacity(0.7 * (1 - phase * 0.7))), lineWidth: 0.6)
+        }
+        if open > 0.1 {
+            for k in 0..<5 {
+                let phase = idleWrap(t * 1.1 + Double(k) / 5, 1)
+                let bx = chestX - 3 + CGFloat(k) * 1.6 + CGFloat(sin(phase * 7 + Double(k))) * 1.5
+                let by = h - 10 - CGFloat(phase) * (h - 12)
+                let r = 0.8 + CGFloat(phase)
+                context.stroke(Path(ellipseIn: CGRect(x: bx - r, y: by - r, width: r * 2, height: r * 2)), with: .color(.white.opacity(Double(open) * 0.8 * (1 - phase))), lineWidth: 0.6)
+            }
+        }
+
+        // Поверхность воды сверху
         var surface = Path()
         surface.move(to: CGPoint(x: 0, y: 0))
         var x: CGFloat = 0
         while x <= w {
-            surface.addLine(to: CGPoint(x: x, y: 2.5 + CGFloat(sin(Double(x) * 0.2 + t * 2)) * 1))
+            surface.addLine(to: CGPoint(x: x, y: 2.2 + CGFloat(sin(Double(x) * 0.2 + t * 2)) * 0.9))
             x += 2
         }
         surface.addLine(to: CGPoint(x: w, y: 0))
         surface.closeSubpath()
-        context.fill(surface, with: .color(Color(red: 0.4, green: 0.8, blue: 1).opacity(0.6)))
-        context.fill(Path(CGRect(x: 0, y: 0, width: w, height: h)),
-                     with: .linearGradient(Gradient(colors: [Color(red: 0.2, green: 0.6, blue: 1).opacity(0.22), .clear]),
-                                           startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: 0, y: h)))
-
-        let period = 18.0
-        let number = Int(floor(t / period))
-        let local = (t - Double(number) * period) / period
-        let rightward = number % 2 == 0
-        let progress = rightward ? local : 1 - local
-        let cx = CGFloat(progress) * (w + 70) - 35
-        let cy = h * 0.55 + CGFloat(sin(t * 0.9)) * 3
-
-        var layer = context
-        layer.translateBy(x: cx, y: cy)
-        if !rightward { layer.scaleBy(x: -1, y: 1) }
-        let skin = Color(red: 0.32, green: 0.45, blue: 0.7)
-        // Хвост машет вверх-вниз
-        let tail = CGFloat(sin(t * 2.2)) * 3
-        layer.fill(Path { p in
-            p.move(to: CGPoint(x: -12, y: 0))
-            p.addQuadCurve(to: CGPoint(x: -21, y: -6 + tail), control: CGPoint(x: -17, y: -2 + tail * 0.5))
-            p.addQuadCurve(to: CGPoint(x: -19, y: 0 + tail * 0.5), control: CGPoint(x: -19, y: -2 + tail))
-            p.addQuadCurve(to: CGPoint(x: -21, y: 6 + tail), control: CGPoint(x: -19, y: 2 + tail))
-            p.addQuadCurve(to: CGPoint(x: -12, y: 1), control: CGPoint(x: -16, y: 2 + tail * 0.5))
-            p.closeSubpath()
-        }, with: .color(skin))
-        layer.fill(Path(ellipseIn: CGRect(x: -16, y: -6.5, width: 32, height: 13)), with: .color(skin))
-        layer.fill(Path(ellipseIn: CGRect(x: -12, y: 0, width: 26, height: 6)), with: .color(Color(red: 0.75, green: 0.85, blue: 0.95)))
-        // Плавник и глаз
-        layer.fill(Path { p in
-            p.move(to: CGPoint(x: 0, y: 3)); p.addLine(to: CGPoint(x: -6, y: 9 + CGFloat(sin(t * 2.2 + 1)) * 1.2)); p.addLine(to: CGPoint(x: -3, y: 3)); p.closeSubpath()
-        }, with: .color(Color(red: 0.26, green: 0.38, blue: 0.62)))
-        layer.fill(Path(ellipseIn: CGRect(x: 9, y: -2.6, width: 2, height: 2)), with: .color(.white))
-        layer.fill(Path(ellipseIn: CGRect(x: 9.6, y: -2.2, width: 1.1, height: 1.1)), with: .color(.black))
-
-        // Фонтан: каждые 5 секунд короткий выброс из спины, капли летят дугой и падают
-        let cycle = t.truncatingRemainder(dividingBy: 5)
-        if cycle < 1.1 {
-            let blow = CGFloat(cycle / 1.1)
-            for k in 0..<9 {
-                let spread = CGFloat(k - 4) * 0.45
-                let px = 5 + spread * blow * 7
-                let py = -6 - (CGFloat(4) * blow - 5.5 * blow * blow) * 7 + abs(spread) * blow * 2
-                layer.fill(Path(ellipseIn: CGRect(x: px - 0.9, y: py - 0.9, width: 1.8, height: 1.8)),
-                           with: .color(Color(red: 0.8, green: 0.95, blue: 1).opacity(0.9 * Double(1 - blow * 0.6))))
-            }
-        }
-        // Пузырьки поднимаются со стороны хвоста
-        for k in 0..<4 {
-            let phase = idleWrap(t * 0.8 + Double(k) / 4, 1)
-            let bx = -22 - CGFloat(k) * 4
-            let by = 2 - CGFloat(phase) * 14
-            layer.stroke(Path(ellipseIn: CGRect(x: bx - 1, y: by - 1, width: 2, height: 2)),
-                         with: .color(.white.opacity(0.6 * (1 - phase))), lineWidth: 0.6)
-        }
+        context.fill(surface, with: .color(Color(red: 0.5, green: 0.88, blue: 1).opacity(0.65)))
     }
 }
 

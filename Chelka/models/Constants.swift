@@ -127,7 +127,7 @@ enum IdleStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
         case .runner: return "Coin runner"
         case .aurora: return "Aurora"
         case .synthwave: return "Synthwave"
-        case .whale: return "Whale"
+        case .whale: return "Reef aquarium"
         case .dragon: return "Dragon"
         case .chase: return "Cat & mouse"
         case .equalizer: return "Equalizer"
