@@ -537,14 +537,29 @@ private enum IdleMatrix {
     static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
         let h = zones.size.height
         let step: CGFloat = 6
+        let green = Color(red: 0.2, green: 0.95, blue: 0.4)
         for (zoneIndex, zone) in [zones.left, zones.right].enumerated() {
             let columns = Int(zone.width / step) - 1
+            // Нижняя граница еле заметно подсвечена всегда, а в места «приземления» символов вспыхивает ярче
+            context.fill(Path(CGRect(x: zone.minX + 2, y: h - 1.5, width: zone.width - 4, height: 1.5)), with: .color(green.opacity(0.14)))
             for column in 0..<columns {
                 let seed = Double(zoneIndex * 31 + column * 7)
                 let speed = 18 + (seed.truncatingRemainder(dividingBy: 5)) * 4
                 let span = Double(h) + 30
                 let headY = CGFloat((t * speed + seed * 13).truncatingRemainder(dividingBy: span)) - 6
                 let x = zone.minX + step * (CGFloat(column) + 0.9)
+
+                // Вспышка внизу: нарастает, когда голова колонки подходит к нижней границе, и затухает после «приземления»
+                let d = headY - (h - 3)
+                let glow: Double = d >= 0 ? exp(-Double(d) / 7) : max(0, 1 + Double(d) / 9) * 0.35
+                if glow > 0.02 {
+                    context.fill(Path(ellipseIn: CGRect(x: x - 9, y: h - 9, width: 18, height: 18)),
+                                 with: .radialGradient(Gradient(colors: [green.opacity(0.75 * glow), .clear]),
+                                                       center: CGPoint(x: x, y: h), startRadius: 0, endRadius: 9))
+                    context.fill(Path(CGRect(x: x - 5, y: h - 1.8, width: 10, height: 1.8)),
+                                 with: .color(Color(red: 0.7, green: 1, blue: 0.78).opacity(0.9 * glow)))
+                }
+
                 for i in 0..<5 {
                     let y = headY - CGFloat(i) * step
                     guard y > -step, y < h + step else { continue }
