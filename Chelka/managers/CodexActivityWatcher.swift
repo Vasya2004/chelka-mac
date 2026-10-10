@@ -49,15 +49,19 @@ final class CodexActivityWatcher {
             switch snap.status {
             case .running where previous != .running:
                 heartbeat[snap.id] = Date()
-                manager.report(id: snap.id, agent: "Codex", status: .running, task: nil, project: snap.project, cwd: snap.cwd)
+                // Новый ход: возвращает и сессию, которую пользователь убрал из списка
+                manager.report(id: snap.id, agent: "Codex", status: .running, task: nil, project: snap.project, cwd: snap.cwd, revive: true)
             case .done where previous == .running:
                 // «Закончил» показываем только если видели, как он работал (иначе это старая сессия)
                 manager.report(id: snap.id, agent: "Codex", status: .done, task: nil, project: snap.project, cwd: snap.cwd)
             case .end where previous == .running:
                 manager.report(id: snap.id, agent: "Codex", status: .idle, task: nil, project: snap.project, cwd: snap.cwd)
             case .running where previous == .running:
-                // Долгий ход: раз в минуту подтверждаем «работает», чтобы запись в менеджере не истекла до завершения
-                if Date().timeIntervalSince(heartbeat[snap.id] ?? .distantPast) > 60 {
+                // Долгий ход: раз в минуту подтверждаем «работает», чтобы запись в менеджере не истекла до завершения.
+                // Если менеджер при этом считает сессию неактивной, поправляем сразу: лог говорит, что она работает
+                let managed = manager.status(of: snap.id)
+                if managed != .running && managed != .waiting
+                    || Date().timeIntervalSince(heartbeat[snap.id] ?? .distantPast) > 60 {
                     heartbeat[snap.id] = Date()
                     manager.report(id: snap.id, agent: "Codex", status: .running, task: nil, project: snap.project, cwd: snap.cwd)
                 }

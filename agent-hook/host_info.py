@@ -7,7 +7,20 @@ import os
 import subprocess
 
 
-def host_info():
+# По каким словам в имени процесса узнаём самого агента (а не промежуточный процесс, который запускает хук)
+_KEYWORDS = {"claude": "claude", "codex": "codex", "cursor": "cursor", "kimi": "kimi"}
+
+
+def _keyword(agent):
+    name = (agent or "").lower()
+    for key, word in _KEYWORDS.items():
+        if key in name:
+            return word
+    return None
+
+
+def host_info(agent=None):
+    keyword = _keyword(agent or os.environ.get("AGENT"))
     pids = []
     tty = None
     agent_pid = None
@@ -26,8 +39,9 @@ def host_info():
         if len(out) < 2:
             break
         ppid, term = out[0], out[1]
-        # Процесс самого агента — первый предок, который не оболочка и не интерпретатор хука
-        if agent_pid is None and _command(pid) not in _WRAPPERS:
+        # Процесс самого агента — ближайший предок с именем агента. Промежуточные процессы (песочница, оболочка,
+        # интерпретатор) не годятся: они живут секунды, и по их завершению агент ошибочно сочли бы закрытым
+        if agent_pid is None and keyword and keyword in _command(pid).lower():
             agent_pid = pid
         if tty is None and term not in ("??", "?"):
             tty = "/dev/" + term if not term.startswith("/") else term

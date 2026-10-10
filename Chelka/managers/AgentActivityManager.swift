@@ -197,8 +197,10 @@ final class AgentActivityManager: ObservableObject {
     }
 
     /// Событие из внешнего источника внутри приложения (например, наблюдатель за логами Codex)
+    /// `revive` — это начало нового хода (не продолжение прежнего): убранную пользователем сессию он возвращает
     func report(id: String, agent: String, status: AgentStatus, task: String?, project: String?, cwd: String?,
-                transcript: String? = nil) {
+                transcript: String? = nil, revive: Bool = false) {
+        if revive { archivedIDs.remove(id) }
         guard !archivedIDs.contains(id) else { return }
         apply(AgentEvent(id: id, agent: agent, status: status, task: task, project: project, cwd: cwd,
                          pids: nil, tty: nil, agentPid: nil, transcript: transcript))
@@ -268,8 +270,8 @@ final class AgentActivityManager: ObservableObject {
         Task.detached(priority: .utility) {
             var stale: [String] = []
             for session in candidates {
-                // Процесс агента завершился — сессии больше нет
-                if let pid = session.agentPID, !Self.processAlive(pid) {
+                // Процесс агента завершился — сессии больше нет (для Codex работу и завершение определяет лог сессии)
+                if let pid = session.agentPID, !session.id.hasPrefix("codex:"), !Self.processAlive(pid) {
                     stale.append(session.id)
                     continue
                 }

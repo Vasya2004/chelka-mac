@@ -33,7 +33,7 @@ elif inp.get("description"):
     detail = inp["description"]
 else:
     detail = json.dumps(inp, ensure_ascii=False)
-host = host_info()
+host = host_info("Claude Code")
 print(json.dumps({
     "id": data.get("session_id") or "claude-code",
     "agent": "Claude Code",
