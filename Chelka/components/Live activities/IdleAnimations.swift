@@ -64,6 +64,7 @@ struct IdleArt: View {
             case .fireworks: IdleFireworks.draw(in: &context, zones: zones, t: t)
             case .portal: IdlePortal.draw(in: &context, zones: zones, t: t)
             case .spider: IdleSpider.draw(in: &context, zones: zones, t: t)
+            case .waterFire: IdleWaterFire.draw(in: &context, zones: zones, t: t)
             }
         }
     }
@@ -1361,6 +1362,133 @@ private enum IdleSpider {
             drawHero(Int(t * 6) % 2 == 0 ? climbA : climbB, at: center, rotation: 0)
         default:
             break
+        }
+    }
+}
+
+// MARK: - Вода и огонь
+
+/// Слева живёт вода, справа огонь. Цикл 16 секунд: 4 с они играют на месте → разлетаются к внешним краям →
+/// стекают вдоль нижней кромки навстречу друг другу, скрываются за чёлкой (там сталкиваются, пар вырывается по обе стороны)
+/// → выходят с противоположных сторон и меняются местами. Затем всё то же в обратную сторону.
+private enum IdleWaterFire {
+    static let cycle = 16.0
+    static let moveStart = 4.0
+    static let moveDuration = 4.0
+    static let blobs = 7
+
+    private static func ease(_ x: CGFloat) -> CGFloat { x * x * (3 - 2 * x) }
+
+    /// Путь «стартовавшего слева» тела за фазу движения s (0…1); для стартующего справа — зеркало
+    private static func path(_ s: CGFloat, zones: IdleZones) -> CGPoint {
+        let h = zones.size.height
+        let home = CGPoint(x: zones.left.midX, y: h * 0.55)
+        let corner = CGPoint(x: zones.left.minX + 5, y: h - 5)
+        let target = CGPoint(x: zones.right.midX, y: h * 0.55)
+        if s <= 0.25 {
+            let k = ease(s / 0.25)
+            return CGPoint(x: home.x + (corner.x - home.x) * k, y: home.y + (corner.y - home.y) * k)
+        } else if s <= 0.875 {
+            // Вдоль нижней кромки, с лёгкой волной
+            let k = ease((s - 0.25) / 0.625)
+            return CGPoint(x: corner.x + (target.x - corner.x) * k, y: corner.y + CGFloat(sin(Double(k) * .pi * 3)) * 1.4)
+        } else {
+            let k = ease((s - 0.875) / 0.125)
+            return CGPoint(x: target.x, y: corner.y + (target.y - corner.y) * k)
+        }
+    }
+
+    private static func position(startsLeft: Bool, at tau: Double, zones: IdleZones) -> CGPoint {
+        var c = tau.truncatingRemainder(dividingBy: cycle)
+        if c < 0 { c += cycle }
+        let half = c < cycle / 2 ? 0 : 1
+        let local = c - Double(half) * cycle / 2
+        let fromLeft = (half == 0) == startsLeft
+        let s = CGFloat(min(1, max(0, (local - moveStart) / moveDuration)))
+        let p = path(s, zones: zones)
+        return fromLeft ? p : CGPoint(x: zones.size.width - p.x, y: p.y)
+    }
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        drawElement(in: &context, zones: zones, t: t, water: true)
+        drawElement(in: &context, zones: zones, t: t, water: false)
+
+        // Пар: когда вода и огонь сталкиваются за чёлкой, у обоих её краёв поднимаются клубы
+        let local = t.truncatingRemainder(dividingBy: cycle / 2)
+        let envelope = exp(-pow((local - 6.5) / 0.75, 2))
+        if envelope > 0.03 {
+            for (index, edgeX) in [zones.left.maxX - 5, zones.right.minX + 5].enumerated() {
+                for i in 0..<6 {
+                    let phase = (t * 0.9 + Double(i) / 6 + Double(index) * 0.4).truncatingRemainder(dividingBy: 1)
+                    let x = edgeX + CGFloat(sin(t * 2 + Double(i) * 1.7)) * 2.5 + (index == 0 ? -CGFloat(i % 3) * 2 : CGFloat(i % 3) * 2)
+                    let y = h - 3 - CGFloat(phase) * (h - 8)
+                    let r = 1.6 + CGFloat(phase) * 2.8
+                    context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
+                                 with: .color(Color(white: 0.92).opacity(0.38 * envelope * (1 - phase))))
+                }
+            }
+        }
+    }
+
+    private static func drawElement(in context: inout GraphicsContext, zones: IdleZones, t: Double, water: Bool) {
+        let outer = water ? Color(red: 0.16, green: 0.5, blue: 1) : Color(red: 1, green: 0.38, blue: 0.08)
+        let inner = water ? Color(red: 0.55, green: 0.9, blue: 1) : Color(red: 1, green: 0.85, blue: 0.3)
+
+        // Тело — цепочка капель: каждая следует по тому же пути с небольшим запаздыванием,
+        // на месте они собираются в комок, в полёте вытягиваются в хвост
+        func blobs(scale: CGFloat) -> [(CGPoint, CGFloat)] {
+            (0..<Self.blobs).map { i in
+                let lag = Double(i) * 0.075
+                var p = position(startsLeft: water, at: t - lag, zones: zones)
+                let k = Double(i)
+                if water {
+                    // Вода колышется
+                    p.x += CGFloat(cos(t * 1.4 + k * 0.9)) * 3.4
+                    p.y += CGFloat(sin(t * 1.9 + k * 1.3)) * 2.4
+                } else {
+                    // Пламя: языки тянутся вверх и трепещут
+                    p.x += CGFloat(sin(t * 7 + k * 2.3)) * (0.6 + 0.35 * CGFloat(i))
+                    p.y -= CGFloat(i) * 1.6 + CGFloat(abs(sin(t * 9 + k * 1.7))) * 1.2
+                }
+                let r = (water ? 4.6 : 5.0) * (1 - 0.09 * CGFloat(i)) * scale
+                return (p, r)
+            }
+        }
+
+        context.drawLayer { layer in
+            layer.addFilter(.alphaThreshold(min: 0.5, color: outer))
+            layer.addFilter(.blur(radius: 2.4))
+            for (p, r) in blobs(scale: 1) {
+                layer.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(.white))
+            }
+        }
+        // Светлая сердцевина: бликующая вода и раскалённое ядро огня
+        context.drawLayer { layer in
+            layer.addFilter(.alphaThreshold(min: 0.5, color: inner))
+            layer.addFilter(.blur(radius: 1.6))
+            for (p, r) in blobs(scale: 0.5) {
+                layer.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r + (water ? -0.8 : 0.8), width: r * 2, height: r * 2)), with: .color(.white))
+            }
+        }
+
+        // Мелочь вокруг: капельки у воды, искры у огня — только пока тело стоит на месте
+        let local = t.truncatingRemainder(dividingBy: cycle / 2)
+        guard local < moveStart + 0.3 || local > cycle / 2 - 0.1 else { return }
+        let head = position(startsLeft: water, at: t, zones: zones)
+        for i in 0..<3 {
+            let phase = (t * (water ? 0.7 : 1.3) + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+            if water {
+                // Капля выпрыгивает и падает обратно
+                let x = head.x + CGFloat(i - 1) * 6
+                let y = head.y - 4 - CGFloat(sin(phase * .pi)) * 9
+                context.fill(Path(ellipseIn: CGRect(x: x - 1, y: y - 1, width: 2, height: 2)),
+                             with: .color(inner.opacity(sin(phase * .pi))))
+            } else {
+                let x = head.x + CGFloat(sin(t * 3 + Double(i) * 2)) * 5
+                let y = head.y - 9 - CGFloat(phase) * 12
+                context.fill(Path(CGRect(x: x, y: y, width: 1.4, height: 1.4)), with: .color(inner.opacity(1 - phase)))
+            }
         }
     }
 }
