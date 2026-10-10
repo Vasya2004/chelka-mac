@@ -1045,23 +1045,92 @@ private enum IdlePuppy {
         default: break
         }
 
+        // Порталы у внутренних краёв зон: щенок «входит» в синий, а выходит из оранжевого (и наоборот на обратном пути)
+        let portalL = zones.left.maxX - 3
+        let portalR = zones.right.minX + 3
+        let blue = Color(red: 0.3, green: 0.62, blue: 1)
+        let orange = Color(red: 1, green: 0.6, blue: 0.2)
+
+        /// Момент, когда центр щенка, бегущего из `a` в `b` за 2,2 с (старт в `start`), пересекает плоскость портала
+        func crossing(from a: CGFloat, to b: CGFloat, start: Double, at target: CGFloat) -> Double {
+            var lo = 0.0, hi = 1.0
+            for _ in 0..<24 {
+                let mid = (lo + hi) / 2
+                let x = run(a, b, mid)
+                if (a < b) == (x < target) { lo = mid } else { hi = mid }
+            }
+            return start + lo * 2.2
+        }
+        let forwardIn = crossing(from: leftX, to: rightX - 4, start: 2, at: portalL)
+        let forwardOut = crossing(from: leftX, to: rightX - 4, start: 2, at: portalR)
+        let backIn = crossing(from: rightX - 4, to: leftX, start: 4.8, at: portalR)
+        let backOut = crossing(from: rightX - 4, to: leftX, start: 4.8, at: portalL)
+
+        /// Раскрытие портала вокруг момента `center`: быстро распахивается, держится, схлопывается
+        func openness(_ center: Double) -> CGFloat {
+            let x = (local - (center - 0.55)) / 1.2
+            guard x > 0, x < 1 else { return 0 }
+            let a = min(1, x / 0.2), b = min(1, (1 - x) / 0.25)
+            let m = CGFloat(min(a, b))
+            return m * m * (3 - 2 * m)
+        }
+        let leftOpen = max(openness(forwardIn), openness(backOut))
+        let rightOpen = max(openness(forwardOut), openness(backIn))
+
+        /// Рисует с обрезкой: видно только то, что левее левого портала или правее правого
+        func throughPortals(_ body: (inout GraphicsContext) -> Void) {
+            var layer = context
+            var clip = Path()
+            clip.addRect(CGRect(x: 0, y: 0, width: portalL, height: h))
+            clip.addRect(CGRect(x: portalR, y: 0, width: zones.size.width - portalR, height: h))
+            layer.clip(to: clip)
+            body(&layer)
+        }
+        func drawBall(on layer: inout GraphicsContext, _ x: CGFloat, _ y: CGFloat) {
+            layer.fill(Path(ellipseIn: CGRect(x: x - 2, y: y - 4, width: 4, height: 4)), with: .color(ballColor))
+        }
+
         // Щенок
         switch local {
         case ..<2:
             (wag ? sitA : sitB).draw(in: &context, x: leftX, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
         case ..<4.2:
             let x = run(leftX, rightX - 4, (local - 2) / 2.2)
-            (step ? walkA : walkB).draw(in: &context, x: x, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
+            throughPortals { layer in
+                (step ? walkA : walkB).draw(in: &layer, x: x, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
+            }
         case ..<4.8:
             walkA.draw(in: &context, x: rightX - 4, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
             ball(rightX + 8, ground - 6)
         case ..<7.0:
             // Обратно с мячом в зубах
             let x = run(rightX - 4, leftX, (local - 4.8) / 2.2)
-            (step ? walkA : walkB).draw(in: &context, x: x, bottom: ground, pixel: px, color: fur, accent: fur, flip: true, dark: dark)
-            ball(x - 12, ground - 6)
+            throughPortals { layer in
+                (step ? walkA : walkB).draw(in: &layer, x: x, bottom: ground, pixel: px, color: fur, accent: fur, flip: true, dark: dark)
+                drawBall(on: &layer, x - 12, ground - 6)
+            }
         default:
             (wag ? sitA : sitB).draw(in: &context, x: leftX, bottom: ground, pixel: px, color: fur, accent: fur, flip: false, dark: dark)
+        }
+
+        // Порталы поверх щенка
+        for (x, open, color, mirrored) in [(portalL, leftOpen, blue, false), (portalR, rightOpen, orange, true)] {
+            guard open > 0.01 else { continue }
+            let ph = (h - 5) * open
+            let pw = 8 * min(1, open * 1.5)
+            let rect = CGRect(x: x - pw / 2, y: ground + 1 - ph, width: pw, height: ph)
+            context.fill(Path(ellipseIn: rect.insetBy(dx: -4, dy: -3)), with: .color(color.opacity(0.2 * Double(open))))
+            context.fill(Path(ellipseIn: rect), with: .color(color.opacity(0.28)))
+            context.stroke(Path(ellipseIn: rect), with: .color(color), lineWidth: 1.7)
+            context.stroke(Path(ellipseIn: rect.insetBy(dx: 1.6, dy: 2.2)), with: .color(color.opacity(0.6)), lineWidth: 0.8)
+            // Искорки бегут по ободу, на стороне чёлки их втягивает внутрь
+            for k in 0..<5 {
+                let angle = t * 5 + Double(k) * 1.26
+                let sx = rect.midX + pw / 2 * CGFloat(cos(angle)) * 1.05
+                let sy = rect.midY + ph / 2 * CGFloat(sin(angle)) * 1.05
+                context.fill(Path(CGRect(x: sx - 0.6, y: sy - 0.6, width: 1.3, height: 1.3)), with: .color(.white.opacity(0.9 * Double(open))))
+            }
+            _ = mirrored
         }
     }
 }
