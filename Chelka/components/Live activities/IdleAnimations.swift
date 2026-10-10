@@ -71,6 +71,12 @@ struct IdleArt: View {
             case .sushi: IdleSushi.draw(in: &context, zones: zones, t: t)
             case .orbit: IdleOrbit.draw(in: &context, zones: zones, t: t)
             case .snow: IdleSnow.draw(in: &context, zones: zones, t: t)
+            case .robot: IdleRobot.draw(in: &context, zones: zones, t: t)
+            case .bats: IdleBats.draw(in: &context, zones: zones, t: t)
+            case .tesla: IdleTesla.draw(in: &context, zones: zones, t: t)
+            case .ocean: IdleOcean.draw(in: &context, zones: zones, t: t)
+            case .jellyfish: IdleJellyfish.draw(in: &context, zones: zones, t: t)
+            case .runner: IdleRunner.draw(in: &context, zones: zones, t: t)
             }
         }
     }
@@ -1855,5 +1861,417 @@ private enum IdleSnow {
                      accent: Color(red: 1, green: 0.55, blue: 0.2), flip: false, dark: Color(white: 0.15))
         tree.draw(in: &context, x: zones.right.midX + 2, bottom: base, pixel: 1.6, color: Color(red: 0.25, green: 0.75, blue: 0.4),
                   accent: .white, flip: false, dark: Color(red: 0.5, green: 0.32, blue: 0.15))
+    }
+}
+
+// MARK: - Робот
+
+/// Пиксельный робот шагает сквозь чёлку, на другой стороне останавливается, мигает антенной и машет рукой, потом идёт обратно
+private enum IdleRobot {
+    static let head = [
+        "...o...",
+        "...#...",
+        ".#####.",
+        ".#o#o#.",
+        ".#####.",
+    ]
+    static let walkA = Sprite(rows: head + ["#######", "#-###-#", "#######", ".#####.", ".#...#.", "##...##"])
+    static let walkB = Sprite(rows: head + ["#######", "#-###-#", "#######", ".#####.", "..#.#..", "..#.#.."])
+    /// Машет: правая рука поднята
+    static let wave = Sprite(rows: [
+        "...o..#",
+        "...#..#",
+        ".#####.",
+        ".#o#o#.",
+        ".#####.",
+        "#######",
+        "#-###..",
+        "#######",
+        ".#####.",
+        ".#...#.",
+        "##...##",
+    ])
+    static let body = Color(red: 0.72, green: 0.78, blue: 0.86)
+    static let glow = Color(red: 0.3, green: 0.95, blue: 1)
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let px: CGFloat = 1.8
+        let ground = h - 3
+        let leftX = zones.left.midX - 3
+        let rightX = zones.right.midX + 3
+        let cycle = 16.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let step = Int(t * 7) % 2 == 0
+
+        func lerp(_ a: CGFloat, _ b: CGFloat, _ p: Double) -> CGFloat { a + (b - a) * CGFloat(min(1, max(0, p))) }
+        func draw(_ sprite: Sprite, x: CGFloat, flip: Bool) {
+            sprite.draw(in: &context, x: x, bottom: ground, pixel: px, color: body, accent: glow, flip: flip,
+                        dark: Color(red: 0.3, green: 0.35, blue: 0.45))
+        }
+
+        switch local {
+        case ..<1.5:
+            draw(walkA, x: leftX, flip: false)
+        case ..<4.5:
+            draw(step ? walkA : walkB, x: lerp(leftX, rightX, (local - 1.5) / 3), flip: false)
+        case ..<8.5:
+            // Остановился справа и приветствует
+            let waving = Int(t * 4) % 2 == 0
+            draw(waving ? wave : walkA, x: rightX, flip: true)
+            // Реплика: «бип» из двух мигающих точек
+            if Int(t * 3) % 2 == 0 {
+                for k in 0..<2 {
+                    context.fill(Path(CGRect(x: rightX - 15 + CGFloat(k) * 4, y: 3, width: 2, height: 2)), with: .color(glow.opacity(0.9)))
+                }
+            }
+        case ..<11.5:
+            draw(step ? walkA : walkB, x: lerp(rightX, leftX, (local - 8.5) / 3), flip: true)
+        default:
+            draw(walkA, x: leftX, flip: false)
+        }
+    }
+}
+
+// MARK: - Летучие мыши
+
+/// Мыши порхают через чёлку, слева светится тыква, справа покачивается привидение
+private enum IdleBats {
+    static let up = Sprite(rows: ["#.....#", "##.#.##", ".#####.", "..#.#.."])
+    static let down = Sprite(rows: ["..###..", ".#####.", "##.#.##", "#.....#"])
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+
+        // Тыква слева: огонёк внутри мерцает
+        let pumpkin = CGPoint(x: zones.left.midX - 4, y: h - 6)
+        let flicker = 0.7 + 0.3 * sin(t * 9) * sin(t * 5.3)
+        context.fill(Path(ellipseIn: CGRect(x: pumpkin.x - 12, y: pumpkin.y - 11, width: 24, height: 22)),
+                     with: .radialGradient(Gradient(colors: [Color.orange.opacity(0.22 * flicker), .clear]),
+                                           center: pumpkin, startRadius: 0, endRadius: 12))
+        context.fill(Path(ellipseIn: CGRect(x: pumpkin.x - 6.5, y: pumpkin.y - 5, width: 13, height: 10)), with: .color(Color(red: 1, green: 0.5, blue: 0.1)))
+        context.fill(Path(CGRect(x: pumpkin.x - 1, y: pumpkin.y - 7, width: 2, height: 2.5)), with: .color(Color(red: 0.3, green: 0.6, blue: 0.2)))
+        for dx in [-3.0, 2.2] {
+            var eye = Path()
+            eye.move(to: CGPoint(x: pumpkin.x + CGFloat(dx), y: pumpkin.y - 2.5))
+            eye.addLine(to: CGPoint(x: pumpkin.x + CGFloat(dx) + 1.6, y: pumpkin.y - 2.5))
+            eye.addLine(to: CGPoint(x: pumpkin.x + CGFloat(dx) + 0.8, y: pumpkin.y - 0.6))
+            eye.closeSubpath()
+            context.fill(eye, with: .color(Color(red: 1, green: 0.95, blue: 0.4).opacity(flicker)))
+        }
+        var mouth = Path()
+        mouth.move(to: CGPoint(x: pumpkin.x - 3, y: pumpkin.y + 1.5))
+        mouth.addQuadCurve(to: CGPoint(x: pumpkin.x + 3, y: pumpkin.y + 1.5), control: CGPoint(x: pumpkin.x, y: pumpkin.y + 4.5))
+        context.stroke(mouth, with: .color(Color(red: 1, green: 0.95, blue: 0.4).opacity(flicker)), lineWidth: 1)
+
+        // Привидение справа: плавно парит, иногда моргает
+        let ghost = CGPoint(x: zones.right.midX + 3, y: h * 0.5 + CGFloat(sin(t * 1.6)) * 3.5)
+        var body = Path()
+        body.move(to: CGPoint(x: ghost.x - 5, y: ghost.y + 6))
+        body.addLine(to: CGPoint(x: ghost.x - 5, y: ghost.y - 1))
+        body.addQuadCurve(to: CGPoint(x: ghost.x + 5, y: ghost.y - 1), control: CGPoint(x: ghost.x, y: ghost.y - 13))
+        body.addLine(to: CGPoint(x: ghost.x + 5, y: ghost.y + 6))
+        for k in 0..<3 {
+            let x1 = ghost.x + 5 - CGFloat(k) * 3.33 - 1.67
+            let x2 = ghost.x + 5 - CGFloat(k + 1) * 3.33
+            body.addQuadCurve(to: CGPoint(x: x2, y: ghost.y + 6),
+                              control: CGPoint(x: x1, y: ghost.y + 6 + CGFloat(sin(t * 5 + Double(k))) * 1.5 + 2))
+        }
+        body.closeSubpath()
+        context.fill(body, with: .color(Color(white: 0.95).opacity(0.88)))
+        let blink = t.truncatingRemainder(dividingBy: 4) < 0.15
+        for dx in [-2.4, 2.4] {
+            context.fill(Path(ellipseIn: CGRect(x: ghost.x + CGFloat(dx) - 0.9, y: ghost.y - 4, width: 1.8, height: blink ? 0.4 : 2.4)),
+                         with: .color(Color(white: 0.1)))
+        }
+
+        // Мыши: у каждой своя высота, скорость и направление
+        for i in 0..<4 {
+            let seed = i * 11 + 3
+            let speed = 14 + 8 * idleRandom(seed)
+            let direction: Double = i % 2 == 0 ? 1 : -1
+            let progress = idleWrap(t * speed / Double(w + 30) + idleRandom(seed + 1), 1)
+            let x = CGFloat(direction > 0 ? progress : 1 - progress) * (w + 30) - 15
+            let y = h * (0.3 + 0.35 * CGFloat(idleRandom(seed + 2))) + CGFloat(sin(t * 3 + Double(seed))) * 4
+            let flap = Int(t * 9 + Double(i)) % 2 == 0
+            (flap ? up : down).draw(in: &context, x: x, bottom: y + 3, pixel: 1.4, color: Color(red: 0.55, green: 0.35, blue: 0.85),
+                                    accent: Color(red: 1, green: 0.3, blue: 0.3), flip: direction < 0)
+        }
+    }
+}
+
+// MARK: - Катушка Тесла
+
+/// Две катушки по краям чёлки: разряды бьют вверх и тянутся друг к другу — вспышки на внутренних краях, когда дуга «замыкается» за чёлкой
+private enum IdleTesla {
+    private static func bolt(from a: CGPoint, to b: CGPoint, seed: Int, jitter: CGFloat) -> Path {
+        var path = Path()
+        path.move(to: a)
+        let segments = 6
+        for i in 1..<segments {
+            let k = CGFloat(i) / CGFloat(segments)
+            let normal = CGPoint(x: -(b.y - a.y), y: b.x - a.x)
+            let length = max(1, hypot(normal.x, normal.y))
+            let offset = (CGFloat(idleRandom(seed + i * 17)) - 0.5) * 2 * jitter
+            path.addLine(to: CGPoint(x: a.x + (b.x - a.x) * k + normal.x / length * offset,
+                                     y: a.y + (b.y - a.y) * k + normal.y / length * offset))
+        }
+        path.addLine(to: b)
+        return path
+    }
+
+    private static func strike(_ context: inout GraphicsContext, _ path: Path, alpha: Double) {
+        context.stroke(path, with: .color(Color(red: 0.55, green: 0.5, blue: 1).opacity(0.35 * alpha)), lineWidth: 3.5)
+        context.stroke(path, with: .color(Color(red: 0.7, green: 0.85, blue: 1).opacity(0.9 * alpha)), lineWidth: 1.2)
+        context.stroke(path, with: .color(.white.opacity(alpha)), lineWidth: 0.5)
+    }
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let base = h - 3
+        let frame = Int(t * 14)
+        let phase = t.truncatingRemainder(dividingBy: 5)
+        // Каждые 5 секунд на 1,2 с дуга замыкается между катушками (за чёлкой)
+        let connected = phase > 3.4 && phase < 4.6
+        var tops: [CGPoint] = []
+
+        for (index, zone) in [zones.left, zones.right].enumerated() {
+            let x = zone.midX + (index == 0 ? -6 : 6)
+            let top = CGPoint(x: x, y: base - 17)
+            tops.append(top)
+            // Катушка: основание, витки, шар
+            context.fill(Path(CGRect(x: x - 5, y: base - 2, width: 10, height: 2)), with: .color(Color(white: 0.35)))
+            for k in 0..<4 {
+                context.fill(Path(CGRect(x: x - 3.4 + CGFloat(k) * 0.5, y: base - 4 - CGFloat(k) * 2.8, width: 6.8 - CGFloat(k), height: 2)),
+                             with: .color(Color(red: 0.75, green: 0.5, blue: 0.25)))
+            }
+            let pulse = 0.8 + 0.2 * sin(t * 12)
+            context.fill(Path(ellipseIn: CGRect(x: x - 7, y: top.y - 7, width: 14, height: 14)),
+                         with: .radialGradient(Gradient(colors: [Color(red: 0.6, green: 0.6, blue: 1).opacity(0.5 * pulse), .clear]),
+                                               center: top, startRadius: 0, endRadius: 7))
+            context.fill(Path(ellipseIn: CGRect(x: x - 3, y: top.y - 3, width: 6, height: 6)), with: .color(Color(white: 0.9)))
+
+            // Случайные разряды в воздух (кадр меняется 14 раз в секунду, поэтому мерцают)
+            if frame % 3 != 0 {
+                let angle = idleRandom(frame * 3 + index) * .pi - .pi
+                let end = CGPoint(x: x + CGFloat(cos(angle)) * 15, y: top.y + CGFloat(sin(angle)) * 11 * -1 - 2)
+                strike(&context, bolt(from: top, to: end, seed: frame * 7 + index * 31, jitter: 3), alpha: 0.9)
+            }
+        }
+
+        // Дуга между катушками: видна у внутренних краёв, остальное закрывает чёлка
+        if connected {
+            let alpha = 0.6 + 0.4 * abs(sin(t * 30))
+            strike(&context, bolt(from: tops[0], to: CGPoint(x: zones.size.width / 2, y: h * 0.5), seed: frame * 5, jitter: 4), alpha: alpha)
+            strike(&context, bolt(from: tops[1], to: CGPoint(x: zones.size.width / 2, y: h * 0.5), seed: frame * 5 + 99, jitter: 4), alpha: alpha)
+            // Вспышка на внутренних краях
+            for edgeX in [zones.left.maxX, zones.right.minX] {
+                context.fill(Path(CGRect(x: edgeX - 8, y: 0, width: 16, height: h)),
+                             with: .radialGradient(Gradient(colors: [Color(red: 0.7, green: 0.8, blue: 1).opacity(0.28 * alpha), .clear]),
+                                                   center: CGPoint(x: edgeX, y: h / 2), startRadius: 0, endRadius: 14))
+            }
+        }
+    }
+}
+
+// MARK: - Океан
+
+/// Волны накатывают по всей ширине, кораблик с парусом плывёт сквозь чёлку, над водой кружат чайки
+private enum IdleOcean {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+
+        func waveY(_ x: CGFloat, layer: Int, t: Double) -> CGFloat {
+            let k = [0.09, 0.13][layer]
+            let speed = [1.6, 2.4][layer]
+            return h - [9.0, 5.5][layer] + CGFloat(sin(Double(x) * k + t * speed)) * [2.2, 1.8][layer]
+        }
+
+        // Кораблик: 14 секунд туда, потом обратно; качается на волне
+        let period = 14.0
+        let number = Int(floor(t / period))
+        let local = (t - Double(number) * period) / period
+        let rightward = number % 2 == 0
+        let boatX = CGFloat(rightward ? local : 1 - local) * (w + 40) - 20
+        let boatY = waveY(boatX, layer: 0, t: t)
+        let tilt = (waveY(boatX + 3, layer: 0, t: t) - waveY(boatX - 3, layer: 0, t: t)) / 6
+        var layer = context
+        layer.translateBy(x: boatX, y: boatY - 2)
+        layer.rotate(by: .radians(Double(tilt) * 0.5))
+        let dir: CGFloat = rightward ? 1 : -1
+        layer.fill(Path { p in
+            p.move(to: CGPoint(x: -7, y: -1)); p.addLine(to: CGPoint(x: 7, y: -1))
+            p.addLine(to: CGPoint(x: 5, y: 3)); p.addLine(to: CGPoint(x: -5, y: 3)); p.closeSubpath()
+        }, with: .color(Color(red: 0.62, green: 0.38, blue: 0.2)))
+        layer.fill(Path(CGRect(x: -0.5, y: -13, width: 1, height: 12)), with: .color(Color(white: 0.7)))
+        layer.fill(Path { p in
+            p.move(to: CGPoint(x: dir * 0.8, y: -12)); p.addLine(to: CGPoint(x: dir * 7, y: -2)); p.addLine(to: CGPoint(x: dir * 0.8, y: -2)); p.closeSubpath()
+        }, with: .color(.white))
+        layer.fill(Path { p in
+            p.move(to: CGPoint(x: dir * -0.8, y: -10)); p.addLine(to: CGPoint(x: dir * -4.5, y: -2)); p.addLine(to: CGPoint(x: dir * -0.8, y: -2)); p.closeSubpath()
+        }, with: .color(Color(red: 1, green: 0.85, blue: 0.85)))
+
+        // Две волны перед корабликом
+        for l in 0..<2 {
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: h))
+            var x: CGFloat = 0
+            while x <= w {
+                path.addLine(to: CGPoint(x: x, y: waveY(x, layer: l, t: t)))
+                x += 2
+            }
+            path.addLine(to: CGPoint(x: w, y: h))
+            path.closeSubpath()
+            context.fill(path, with: .color(l == 0 ? Color(red: 0.12, green: 0.45, blue: 0.85).opacity(0.85) : Color(red: 0.2, green: 0.6, blue: 1).opacity(0.9)))
+        }
+        // Пена
+        for i in 0..<12 {
+            let x = CGFloat(idleWrap(Double(i) * 19 + t * 6, Double(w)))
+            context.fill(Path(CGRect(x: x, y: waveY(x, layer: 1, t: t) - 0.6, width: 3, height: 1)), with: .color(.white.opacity(0.7)))
+        }
+
+        // Чайки
+        for i in 0..<2 {
+            let x = CGFloat(idleWrap(t * (9 + Double(i) * 4) + Double(i) * 70, Double(w + 20))) - 10
+            let y = h * 0.28 + CGFloat(i) * 5 + CGFloat(sin(t * 1.3 + Double(i))) * 2
+            let flap = CGFloat(sin(t * 7 + Double(i) * 2)) * 2
+            var wings = Path()
+            wings.move(to: CGPoint(x: x - 4, y: y + flap))
+            wings.addQuadCurve(to: CGPoint(x: x, y: y), control: CGPoint(x: x - 2, y: y - 2 - flap))
+            wings.addQuadCurve(to: CGPoint(x: x + 4, y: y + flap), control: CGPoint(x: x + 2, y: y - 2 - flap))
+            context.stroke(wings, with: .color(.white.opacity(0.9)), lineWidth: 1)
+        }
+    }
+}
+
+// MARK: - Медузы
+
+/// Светящиеся медузы пульсируют куполом и медленно плывут: слева голубая, справа розовая
+private enum IdleJellyfish {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        for (index, zone) in [zones.left, zones.right].enumerated() {
+            let tint = index == 0 ? Color(red: 0.3, green: 0.85, blue: 1) : Color(red: 1, green: 0.45, blue: 0.85)
+
+            // Планктон
+            for i in 0..<8 {
+                let seed = Double(index * 8 + i) + 1
+                let x = zone.minX + zone.width * CGFloat(idleRandom(Int(seed) * 3)) + CGFloat(sin(t * 0.4 + seed)) * 3
+                let y = h * CGFloat(idleRandom(Int(seed) * 5)) - CGFloat(idleWrap(t * 1.5 + seed * 4, 8))
+                let twinkle = 0.3 + 0.7 * abs(sin(t * 1.2 + seed))
+                context.fill(Path(ellipseIn: CGRect(x: x, y: idleWrapCG(y, h), width: 1.1, height: 1.1)), with: .color(tint.opacity(0.5 * twinkle)))
+            }
+
+            // Купол сжимается с толчком и расправляется; вместе с толчком медуза всплывает
+            let seed = Double(index) * 2.3
+            let beat = (sin(t * 2.6 + seed) + 1) / 2
+            let squeeze = 1 + 0.18 * CGFloat(beat)
+            let cx = zone.midX + CGFloat(sin(t * 0.5 + seed)) * 7
+            let cy = h * 0.42 + CGFloat(sin(t * 0.9 + seed)) * 5 - CGFloat(beat) * 1.5
+            let bw = 13 / squeeze
+            let bh = 8 * squeeze
+
+            // Щупальца: волнистые линии, тянущиеся вслед
+            for k in 0..<5 {
+                let offset = CGFloat(k - 2) * bw / 5
+                var tentacle = Path()
+                tentacle.move(to: CGPoint(x: cx + offset, y: cy))
+                for s in 1...5 {
+                    let sy = cy + CGFloat(s) * 3.1
+                    let sx = cx + offset + CGFloat(sin(t * 3 - Double(s) * 0.9 + Double(k))) * (1 + CGFloat(s) * 0.45)
+                    tentacle.addLine(to: CGPoint(x: sx, y: sy))
+                }
+                context.stroke(tentacle, with: .color(tint.opacity(0.55)), lineWidth: 0.9)
+            }
+            // Купол — полукруг с внутренним свечением
+            var bell = Path()
+            bell.move(to: CGPoint(x: cx - bw / 2, y: cy))
+            bell.addQuadCurve(to: CGPoint(x: cx + bw / 2, y: cy), control: CGPoint(x: cx, y: cy - bh * 1.7))
+            bell.addQuadCurve(to: CGPoint(x: cx - bw / 2, y: cy), control: CGPoint(x: cx, y: cy + 2.2))
+            context.fill(bell, with: .linearGradient(Gradient(colors: [tint.opacity(0.95), tint.opacity(0.35)]),
+                                                     startPoint: CGPoint(x: cx, y: cy - bh), endPoint: CGPoint(x: cx, y: cy + 2)))
+            context.fill(Path(ellipseIn: CGRect(x: cx - bw / 2 - 5, y: cy - bh - 4, width: bw + 10, height: bh + 10)),
+                         with: .radialGradient(Gradient(colors: [tint.opacity(0.25), .clear]), center: CGPoint(x: cx, y: cy - bh / 2),
+                                               startRadius: 0, endRadius: bw))
+            context.fill(Path(ellipseIn: CGRect(x: cx - 2, y: cy - bh * 0.75, width: 4, height: 1.8)), with: .color(.white.opacity(0.55)))
+        }
+    }
+
+    private static func idleWrapCG(_ value: CGFloat, _ period: CGFloat) -> CGFloat {
+        CGFloat(idleWrap(Double(value), Double(period)))
+    }
+}
+
+// MARK: - Бегун
+
+/// Платформер: герой бежит на месте, мир едет мимо — монетки выстраиваются дугой, он подпрыгивает и собирает их, звёздочки вспыхивают
+private enum IdleRunner {
+    static let hero = Sprite(rows: [
+        "..##..",
+        ".####.",
+        "..oo..",
+        ".####.",
+        "#-##-#",
+        "..--..",
+        ".-..-.",
+        "##..##",
+    ])
+    static let coinGold = Color(red: 1, green: 0.82, blue: 0.2)
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let ground = h - 5
+        let heroX = zones.left.midX - 4
+        let speed = 34.0
+
+        // Земля из кирпичиков едет влево
+        context.fill(Path(CGRect(x: 0, y: ground, width: w, height: 5)), with: .color(Color(red: 0.55, green: 0.3, blue: 0.15)))
+        var brick = -idleWrap(t * speed, 8)
+        while brick < w {
+            context.fill(Path(CGRect(x: brick, y: ground, width: 0.8, height: 5)), with: .color(Color(red: 0.3, green: 0.15, blue: 0.08)))
+            brick += 8
+        }
+        context.fill(Path(CGRect(x: 0, y: ground, width: w, height: 1)), with: .color(Color(red: 0.4, green: 0.8, blue: 0.35)))
+
+        // Прыжок раз в 2 секунды, монетки приходят под вершину прыжка
+        let period = 2.0
+        let airTime = 0.85
+        let jumpHeight: CGFloat = 13
+        let number = Int(floor(t / period))
+        let phase = t - Double(number) * period
+        var lift: CGFloat = 0
+        if phase < airTime { lift = CGFloat(sin(.pi * phase / airTime)) * jumpHeight }
+
+        for k in (number - 1)...(number + 6) {
+            let apexTime = Double(k) * period + airTime / 2
+            let baseX = heroX + CGFloat((apexTime - t) * speed)
+            for (j, dx) in [-9.0, 0.0, 9.0].enumerated() {
+                let x = baseX + CGFloat(dx)
+                guard x > -6, x < w + 6 else { continue }
+                // Дуга: боковые монетки чуть ниже
+                let y = ground - 8 - jumpHeight + (j == 1 ? 0 : 3.5)
+                let collectedAt = (apexTime - t) + Double(dx) / speed
+                if collectedAt < 0 && collectedAt > -0.35 {
+                    // Собрана: вспыхивает звёздочкой и тает
+                    let q = CGFloat(-collectedAt / 0.35)
+                    context.fill(Path(ellipseIn: CGRect(x: x - 3 - q * 3, y: y - 3 - q * 3, width: 6 + q * 6, height: 6 + q * 6)),
+                                 with: .color(coinGold.opacity(0.5 * Double(1 - q))))
+                    continue
+                } else if collectedAt <= -0.35 { continue }
+                // Монетка вращается: меняется ширина
+                let spin = CGFloat(abs(cos(t * 6 + Double(k * 3 + j))))
+                context.fill(Path(ellipseIn: CGRect(x: x - 2.6 * spin - 0.4, y: y - 3, width: 5.2 * spin + 0.8, height: 6)), with: .color(coinGold))
+                context.fill(Path(CGRect(x: x - 0.4, y: y - 1.5, width: 0.8, height: 3)), with: .color(Color(red: 0.8, green: 0.55, blue: 0.1)))
+            }
+        }
+
+        // Герой: в воздухе ноги вместе, на земле бежит
+        let running = Int(t * 10) % 2 == 0
+        _ = running
+        hero.draw(in: &context, x: heroX, bottom: ground - lift, pixel: 1.7, color: Color(red: 0.9, green: 0.2, blue: 0.2),
+                  accent: Color(red: 1, green: 0.8, blue: 0.62), flip: false, dark: Color(red: 0.2, green: 0.35, blue: 0.9))
     }
 }
