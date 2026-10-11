@@ -119,7 +119,7 @@ enum ClosedNotchLayout {
 
 /// Анимация закрытой «чёлки» в простое: нет ни работающих нейросетей, ни медиа
 enum IdleStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case off, cat, pong, fireflies, fish, snake, clock, chomp, matrix, rain, invaders, dino, blocks, puppy, fireworks, rocket, train, snow, robot, bats, tesla, ocean, jellyfish, runner, aurora, synthwave, whale, dragon, chase, equalizer, autumn, sakura, beach, rainyNight, moon, garden, voxels, lighthouse, carnival, windmill, city, cauldron, arcade
+    case off, cat, pong, fireflies, fish, snake, clock, chomp, matrix, rain, invaders, dino, blocks, puppy, fireworks, rocket, train, snow, robot, bats, tesla, ocean, jellyfish, runner, aurora, synthwave, whale, dragon, chase, equalizer, autumn, sakura, beach, rainyNight, moon, garden, voxels, lighthouse, carnival, windmill, city, cauldron, arcade, money, supercar, growth, summit, levelUp, ticker
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -166,6 +166,12 @@ enum IdleStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
         case .city: return "Night city"
         case .cauldron: return "Cauldron"
         case .arcade: return "Arcade"
+        case .money: return "Money"
+        case .supercar: return "Dream car"
+        case .growth: return "To the moon"
+        case .summit: return "Summit"
+        case .levelUp: return "Level up"
+        case .ticker: return "Motivation"
         }
     }
 }

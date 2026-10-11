@@ -89,6 +89,12 @@ struct IdleArt: View {
             case .city: IdleCity.draw(in: &context, zones: zones, t: t)
             case .cauldron: IdleCauldron.draw(in: &context, zones: zones, t: t)
             case .arcade: IdleArcade.draw(in: &context, zones: zones, t: t)
+            case .money: IdleMoney.draw(in: &context, zones: zones, t: t)
+            case .supercar: IdleSupercar.draw(in: &context, zones: zones, t: t)
+            case .growth: IdleGrowth.draw(in: &context, zones: zones, t: t)
+            case .summit: IdleSummit.draw(in: &context, zones: zones, t: t)
+            case .levelUp: IdleLevelUp.draw(in: &context, zones: zones, t: t)
+            case .ticker: IdleTicker.draw(in: &context, zones: zones, t: t)
             }
         }
     }
@@ -3539,6 +3545,535 @@ private enum IdleArcade {
             screen.fill(Path(CGRect(x: px - 1, y: rect.maxY - 1.6, width: 2, height: 1)), with: .color(.white))
             let shot = idleWrap(t * 1.4, 1)
             screen.fill(Path(CGRect(x: px - 0.2, y: rect.maxY - 2 - CGFloat(shot) * (rect.height - 3), width: 0.5, height: 1.4)), with: .color(Color(red: 1, green: 0.9, blue: 0.3)))
+        }
+    }
+}
+
+// MARK: - Мотивация
+
+// MARK: Деньги
+
+/// Деньги идут: сверху сыплются купюры, слева растут столбики золотых монет, справа мешок выстреливает монетами, а счётчик дохода тикает вверх
+private enum IdleMoney {
+    private static func coin(_ context: inout GraphicsContext, x: CGFloat, y: CGFloat, width: CGFloat = 7, height: CGFloat = 2.3) {
+        context.fill(Path(ellipseIn: CGRect(x: x - width / 2, y: y, width: width, height: height)), with: .color(Color(red: 0.75, green: 0.5, blue: 0.05)))
+        context.fill(Path(ellipseIn: CGRect(x: x - width / 2, y: y - 0.7, width: width, height: height)), with: .color(Color(red: 1, green: 0.85, blue: 0.25)))
+        context.fill(Path(ellipseIn: CGRect(x: x - width * 0.28, y: y - 0.2, width: width * 0.56, height: height * 0.55)), with: .color(Color(red: 1, green: 0.95, blue: 0.6)))
+    }
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let ground = h - 3
+        let cycle = 26.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let gold = Color(red: 1, green: 0.85, blue: 0.25)
+        for (i, zone) in [zones.left, zones.right].enumerated() {
+            idleMound(&context, zone: zone, h: h, pile: 2.2, color: Color(red: 0.1, green: 0.25, blue: 0.15), shift: Double(i) * 2)
+        }
+
+        // Купюры падают и переворачиваются в полёте
+        for (index, zone) in [zones.left, zones.right].enumerated() {
+            for k in 0..<5 {
+                let seed = index * 5 + k + 1
+                let speed = 9 + 6 * idleRandom(seed)
+                let y = CGFloat(idleWrap(t * speed + Double(seed) * 8, Double(h) + 10)) - 5
+                let x = zone.minX + zone.width * CGFloat(idleRandom(seed + 30)) + CGFloat(sin(t * 1.2 + Double(seed))) * 4
+                var layer = context
+                layer.translateBy(x: x, y: y)
+                layer.rotate(by: .radians(sin(t * 1.5 + Double(seed)) * 0.7))
+                let flip = CGFloat(max(0.25, abs(cos(t * 2.2 + Double(seed)))))
+                layer.scaleBy(x: 1, y: flip)
+                layer.fill(Path(roundedRect: CGRect(x: -3.2, y: -1.5, width: 6.4, height: 3), cornerRadius: 0.5), with: .color(Color(red: 0.45, green: 0.85, blue: 0.5)))
+                layer.stroke(Path(roundedRect: CGRect(x: -3.2, y: -1.5, width: 6.4, height: 3), cornerRadius: 0.5), with: .color(Color(red: 0.2, green: 0.5, blue: 0.25)), lineWidth: 0.5)
+                layer.fill(Path(ellipseIn: CGRect(x: -1, y: -1, width: 2, height: 2)), with: .color(Color(red: 0.75, green: 1, blue: 0.8)))
+            }
+        }
+
+        // Столбики монет слева: растут одна за другой, раз в цикл «обналичиваются» со вспышкой
+        let built = min(15, Int(local * 0.75))
+        let cashOut = local > 21.5
+        let flash = cashOut ? CGFloat(max(0, 1 - (local - 21.5) / 1.2)) : 0
+        for stack in 0..<3 {
+            let sx = zones.left.minX + 8 + CGFloat(stack) * 10
+            let count = cashOut ? 0 : (built / 3 + (stack < built % 3 ? 1 : 0))
+            for n in 0..<count {
+                coin(&context, x: sx, y: ground - 2.4 - CGFloat(n) * 1.8)
+            }
+            if flash > 0 {
+                for k in 0..<4 {
+                    let a = Double(k) * 1.6 + Double(stack)
+                    let r = (1 - flash) * 9
+                    var spark = Path()
+                    let c = CGPoint(x: sx + CGFloat(cos(a)) * r, y: ground - 8 + CGFloat(sin(a)) * r)
+                    spark.move(to: CGPoint(x: c.x - 1.4, y: c.y)); spark.addLine(to: CGPoint(x: c.x + 1.4, y: c.y))
+                    spark.move(to: CGPoint(x: c.x, y: c.y - 1.4)); spark.addLine(to: CGPoint(x: c.x, y: c.y + 1.4))
+                    context.stroke(spark, with: .color(gold.opacity(Double(flash))), lineWidth: 0.9)
+                }
+            }
+        }
+
+        // Мешок с долларом справа и фонтан монет
+        let bx = zones.right.midX - 5
+        let squish = CGFloat(1 + 0.05 * sin(t * 6))
+        context.fill(Path(ellipseIn: CGRect(x: bx - 6 * squish, y: ground - 11, width: 12 * squish, height: 11)), with: .color(Color(red: 0.7, green: 0.55, blue: 0.3)))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: bx - 3, y: ground - 11)); p.addLine(to: CGPoint(x: bx - 2, y: ground - 14)); p.addLine(to: CGPoint(x: bx + 2, y: ground - 14)); p.addLine(to: CGPoint(x: bx + 3, y: ground - 11)); p.closeSubpath()
+        }, with: .color(Color(red: 0.62, green: 0.47, blue: 0.25)))
+        context.fill(Path(roundedRect: CGRect(x: bx - 3, y: ground - 15, width: 6, height: 1.6), cornerRadius: 0.6), with: .color(Color(red: 0.8, green: 0.3, blue: 0.25)))
+        context.draw(Text("$").font(.system(size: 8, weight: .heavy, design: .rounded)).foregroundColor(Color(red: 0.12, green: 0.4, blue: 0.2)), at: CGPoint(x: bx, y: ground - 5.2))
+        for k in 0..<5 {
+            let tau = idleWrap(t * 0.85 + Double(k) / 5, 1)
+            let vx = (Double(k) - 2) * 4.2
+            let x = bx + CGFloat(vx * tau)
+            let y = ground - 15 - CGFloat(18 * tau - 20 * tau * tau)
+            let spin = abs(cos(t * 9 + Double(k) * 2))
+            coin(&context, x: x, y: y, width: 1.2 + 4.4 * CGFloat(spin), height: 2)
+        }
+
+        // Счётчик дохода тикает вверх
+        let value = 1200 + Int(local * 430)
+        let text = "$\(value / 1000),\(String(format: "%03d", value % 1000))"
+        context.draw(Text(text).font(.system(size: 7.5, weight: .heavy, design: .monospaced)).foregroundColor(Color(red: 0.55, green: 1, blue: 0.6)),
+                     at: CGPoint(x: zones.right.maxX - 2, y: 5), anchor: .trailing)
+    }
+}
+
+// MARK: Суперкар
+
+/// Закат на трассе: спорткар с неоновой подсветкой проносится сквозь чёлку, от фар бьёт свет, назад летят полосы скорости; каждый раз новый цвет и новое направление
+private enum IdleSupercar {
+    static let colors: [Color] = [Color(red: 0.95, green: 0.15, blue: 0.2), Color(red: 1, green: 0.8, blue: 0.1), Color(red: 0.2, green: 0.5, blue: 1), Color(red: 0.2, green: 0.9, blue: 0.6)]
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let road = h - 4
+
+        // Закатное небо и солнце за горизонтом
+        context.fill(Path(CGRect(x: 0, y: 0, width: w, height: road)),
+                     with: .linearGradient(Gradient(colors: [Color(red: 0.2, green: 0.05, blue: 0.4).opacity(0.7), Color(red: 1, green: 0.4, blue: 0.3).opacity(0.55)]),
+                                           startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: 0, y: road)))
+        let sun = CGPoint(x: zones.left.midX + 4, y: road)
+        var sunLayer = context
+        sunLayer.clip(to: Path(CGRect(x: 0, y: 0, width: w, height: road)))
+        sunLayer.fill(Path(ellipseIn: CGRect(x: sun.x - 10, y: sun.y - 10, width: 20, height: 20)),
+                      with: .linearGradient(Gradient(colors: [Color(red: 1, green: 0.9, blue: 0.4), Color(red: 1, green: 0.35, blue: 0.5)]),
+                                            startPoint: CGPoint(x: sun.x, y: sun.y - 10), endPoint: CGPoint(x: sun.x, y: sun.y)))
+        // Пальмы-силуэты по краям
+        for x in [zones.left.minX + 4, zones.right.maxX - 6] {
+            context.stroke(Path { p in p.move(to: CGPoint(x: x, y: road)); p.addQuadCurve(to: CGPoint(x: x + 2, y: road - 14), control: CGPoint(x: x - 2, y: road - 8)) },
+                           with: .color(Color(white: 0.06)), lineWidth: 1.4)
+            for k in 0..<4 {
+                let dir = CGFloat(k - 1) - 0.5
+                context.stroke(Path { p in p.move(to: CGPoint(x: x + 2, y: road - 14)); p.addQuadCurve(to: CGPoint(x: x + 2 + dir * 5, y: road - 11 + abs(dir)), control: CGPoint(x: x + 2 + dir * 2.4, y: road - 17)) },
+                               with: .color(Color(white: 0.06)), lineWidth: 1.2)
+            }
+        }
+        // Дорога: асфальт, неоновая кромка, бегущая разметка
+        context.fill(Path(CGRect(x: 0, y: road, width: w, height: h - road)), with: .color(Color(white: 0.1)))
+        context.fill(Path(CGRect(x: 0, y: road, width: w, height: 0.8)), with: .color(Color(red: 1, green: 0.4, blue: 0.7).opacity(0.8)))
+        var dash = -CGFloat(idleWrap(t * 60, 12))
+        while dash < w {
+            context.fill(Path(CGRect(x: dash, y: road + 2, width: 6, height: 0.7)), with: .color(.white.opacity(0.6)))
+            dash += 12
+        }
+
+        // Машина: проезд 3 секунды раз в 8; чётные проезды слева направо, нечётные обратно
+        let period = 8.0
+        let number = Int(floor(t / period))
+        let local = t - Double(number) * period
+        guard local < 3.4 else { return }
+        let rightward = number % 2 == 0
+        let progress = CGFloat(local / 3.4)
+        let eased = progress * progress * (3 - 2 * progress) * 0.35 + progress * 0.65
+        let x = (rightward ? eased : 1 - eased) * (w + 90) - 45
+        let color = colors[number % colors.count]
+        var layer = context
+        layer.translateBy(x: x, y: road + 2.2)
+        layer.scaleBy(x: (rightward ? 1 : -1) * 1.1, y: 1.1)
+        // Полосы скорости позади
+        for k in 0..<5 {
+            let y = -1.5 - CGFloat(k) * 1.5
+            let length = 10 + CGFloat(idleRandom(k + Int(t * 20)) * 12)
+            layer.fill(Path(CGRect(x: -12 - length, y: y, width: length, height: 0.5)), with: .color(.white.opacity(0.3)))
+        }
+        // Неоновая подсветка снизу
+        layer.fill(Path(ellipseIn: CGRect(x: -11, y: -1.2, width: 22, height: 4)), with: .color(color.opacity(0.35)))
+        // Пламя из выхлопа
+        let flame = 3 + CGFloat(abs(sin(t * 40))) * 3
+        layer.fill(Path { p in
+            p.move(to: CGPoint(x: -9.6, y: -2.5)); p.addLine(to: CGPoint(x: -9.6 - flame, y: -1.9)); p.addLine(to: CGPoint(x: -9.6, y: -1.2)); p.closeSubpath()
+        }, with: .color(Color(red: 1, green: 0.6, blue: 0.2)))
+        // Свет фар
+        layer.fill(Path { p in
+            p.move(to: CGPoint(x: 9.6, y: -3.3)); p.addLine(to: CGPoint(x: 34, y: -7)); p.addLine(to: CGPoint(x: 34, y: 1)); p.closeSubpath()
+        }, with: .linearGradient(Gradient(colors: [Color(red: 1, green: 0.95, blue: 0.6).opacity(0.4), .clear]), startPoint: CGPoint(x: 10, y: -3), endPoint: CGPoint(x: 34, y: -3)))
+        // Кузов
+        layer.fill(Path { p in
+            p.move(to: CGPoint(x: -9.6, y: -1.5)); p.addLine(to: CGPoint(x: -9.3, y: -4)); p.addLine(to: CGPoint(x: -4.5, y: -4.8)); p.addLine(to: CGPoint(x: -1.6, y: -7.4))
+            p.addLine(to: CGPoint(x: 3.5, y: -7.4)); p.addLine(to: CGPoint(x: 6.6, y: -4.6)); p.addLine(to: CGPoint(x: 9.8, y: -3.6)); p.addLine(to: CGPoint(x: 10, y: -1.5)); p.closeSubpath()
+        }, with: .color(color))
+        layer.fill(Path { p in
+            p.move(to: CGPoint(x: -2.4, y: -4.9)); p.addLine(to: CGPoint(x: -0.7, y: -6.7)); p.addLine(to: CGPoint(x: 2.8, y: -6.7)); p.addLine(to: CGPoint(x: 4.6, y: -4.9)); p.closeSubpath()
+        }, with: .color(Color(red: 0.6, green: 0.9, blue: 1).opacity(0.85)))
+        layer.fill(Path(CGRect(x: -9.6, y: -3.4, width: 1.2, height: 1)), with: .color(Color(red: 1, green: 0.1, blue: 0.1)))
+        layer.fill(Path(CGRect(x: 8.6, y: -3.4, width: 1.4, height: 1)), with: .color(Color(red: 1, green: 0.95, blue: 0.6)))
+        // Колёса со спицами
+        for wx in [-5.8, 6.0] {
+            let c = CGPoint(x: wx, y: -1.2)
+            layer.fill(Path(ellipseIn: CGRect(x: c.x - 2.5, y: c.y - 2.5, width: 5, height: 5)), with: .color(Color(white: 0.05)))
+            layer.fill(Path(ellipseIn: CGRect(x: c.x - 1.5, y: c.y - 1.5, width: 3, height: 3)), with: .color(Color(white: 0.75)))
+            for k in 0..<3 {
+                let a = t * 30 + Double(k) * 2.1
+                var spoke = Path()
+                spoke.move(to: c); spoke.addLine(to: CGPoint(x: c.x + 1.5 * CGFloat(cos(a)), y: c.y + 1.5 * CGFloat(sin(a))))
+                layer.stroke(spoke, with: .color(Color(white: 0.3)), lineWidth: 0.5)
+            }
+        }
+    }
+}
+
+// MARK: Рост
+
+/// «К луне»: свечи биржевого графика одна за другой растут вверх, линия тренда светится, в конце стартует ракета и вспыхивает «+1000%»
+private enum IdleGrowth {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let cycle = 18.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let green = Color(red: 0.25, green: 0.9, blue: 0.5)
+        let red = Color(red: 1, green: 0.35, blue: 0.4)
+        let bottom = h - 3
+        let top: CGFloat = 4
+
+        // Сетка
+        for k in 1...3 {
+            let y = bottom - (bottom - top) * CGFloat(k) / 4
+            context.fill(Path(CGRect(x: 0, y: y, width: w, height: 0.4)), with: .color(.white.opacity(0.07)))
+        }
+
+        // Свечи: 7 слева и 7 справа, цена в целом растёт со случайными откатами
+        let count = 14
+        var points: [CGPoint] = []
+        for i in 0..<count {
+            let zone = i < 7 ? zones.left : zones.right
+            let slot = i < 7 ? i : i - 7
+            let x = zone.minX + 3.2 + CGFloat(slot) * 4.7
+            var price = 0.1 + 0.058 * Double(i) + (idleRandom(i + 700) - 0.5) * 0.14
+            price = min(0.95, max(0.06, price))
+            let wickHigh = price + 0.07 + idleRandom(i + 710) * 0.06
+            let wickLow = price - 0.06 - idleRandom(i + 720) * 0.05
+            let isGreen = idleRandom(i + 730) > 0.28 || i > 11
+            let appearAt = Double(i) * 0.65
+            let grow = CGFloat(min(1, max(0, (local - appearAt) / 0.5)))
+            guard grow > 0 else { continue }
+            func y(_ p: Double) -> CGFloat { bottom - (bottom - top) * CGFloat(p) }
+            let color = isGreen ? green : red
+            let bodyTop = y(price + (isGreen ? 0.05 : -0.03)), bodyBottom = y(price - (isGreen ? 0.03 : -0.05))
+            let mid = (bodyTop + bodyBottom) / 2
+            context.stroke(Path { p in p.move(to: CGPoint(x: x, y: mid - (mid - y(wickHigh)) * grow)); p.addLine(to: CGPoint(x: x, y: mid + (y(wickLow) - mid) * grow)) },
+                           with: .color(color), lineWidth: 0.7)
+            let bodyH = max(1.6, abs(bodyBottom - bodyTop)) * grow
+            context.fill(Path(CGRect(x: x - 1.4, y: mid - bodyH / 2, width: 2.8, height: bodyH)), with: .color(color))
+            points.append(CGPoint(x: x, y: y(price)))
+        }
+
+        // Линия тренда и стрелка
+        if local > 9.5, points.count == count {
+            let reveal = CGFloat(min(1, (local - 9.5) / 1.5))
+            var trend = Path()
+            trend.move(to: points[0])
+            for p in points.dropFirst() { trend.addLine(to: p) }
+            context.stroke(trend.trimmedPath(from: 0, to: reveal), with: .color(green.opacity(0.35)), lineWidth: 3)
+            context.stroke(trend.trimmedPath(from: 0, to: reveal), with: .color(.white.opacity(0.9)), lineWidth: 0.8)
+        }
+
+        // Ракета стартует из последней свечи вверх
+        if local > 11 {
+            let q = CGFloat(min(1, (local - 11) / 3))
+            let rx = zones.right.maxX - 5 + CGFloat(sin(t * 20)) * 0.3
+            let ry = bottom - 14 - q * q * (h + 6)
+            context.fill(Path { p in
+                p.move(to: CGPoint(x: rx - 1.6, y: ry + 4)); p.addLine(to: CGPoint(x: rx, y: ry + 4 + 4 + CGFloat(abs(sin(t * 40))) * 4)); p.addLine(to: CGPoint(x: rx + 1.6, y: ry + 4)); p.closeSubpath()
+            }, with: .color(Color(red: 1, green: 0.6, blue: 0.2)))
+            context.fill(Path(roundedRect: CGRect(x: rx - 2, y: ry - 4, width: 4, height: 8), cornerRadius: 2), with: .color(.white))
+            context.fill(Path { p in
+                p.move(to: CGPoint(x: rx - 2, y: ry - 2)); p.addLine(to: CGPoint(x: rx, y: ry - 6.5)); p.addLine(to: CGPoint(x: rx + 2, y: ry - 2)); p.closeSubpath()
+            }, with: .color(Color(red: 1, green: 0.35, blue: 0.3)))
+        }
+        // Процент роста всплывает
+        if local > 12.5, local < 17 {
+            let q = CGFloat(min(1, (local - 12.5) / 0.4))
+            context.draw(Text("+1000%").font(.system(size: 8, weight: .heavy, design: .rounded)).foregroundColor(green.opacity(Double(q) * (local > 16 ? Double(17 - local) : 1))),
+                         at: CGPoint(x: zones.right.minX + 12, y: 7 - (1 - q) * 3))
+        }
+    }
+}
+
+// MARK: Вершина
+
+/// Альпинист по серпантину поднимается на вершину слева, поднимает руки и водружает флаг; справа за горами встаёт солнце. Девиз: не останавливайся
+private enum IdleSummit {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let ground = h - 2.5
+        let cycle = 24.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let fadeOut = local > 22.5 ? Double(max(0, (24 - local) / 1.5)) : 1
+        let zone = zones.left
+
+        // Небо: розовеет по мере восхода
+        let dawn = CGFloat(min(1, local / 16))
+        context.fill(Path(CGRect(x: 0, y: 0, width: zones.size.width, height: h)),
+                     with: .linearGradient(Gradient(colors: [Color(red: 0.1, green: 0.1, blue: 0.3).opacity(0.0), Color(red: 1, green: 0.5, blue: 0.4).opacity(0.5 * Double(dawn))]),
+                                           startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: 0, y: h)))
+
+        // Солнце справа
+        let sunX = zones.right.midX + 2
+        let sunY = ground - 2 - dawn * 16
+        var rightLayer = context
+        rightLayer.clip(to: Path(CGRect(x: zones.right.minX, y: 0, width: zones.right.width, height: ground)))
+        for k in 0..<10 {
+            let a = Double(k) * .pi / 5 + t * 0.2
+            var ray = Path()
+            ray.move(to: CGPoint(x: sunX + 6 * CGFloat(cos(a)), y: sunY + 6 * CGFloat(sin(a))))
+            ray.addLine(to: CGPoint(x: sunX + (9 + 2 * CGFloat(sin(t * 2 + Double(k)))) * CGFloat(cos(a)), y: sunY + (9 + 2 * CGFloat(sin(t * 2 + Double(k)))) * CGFloat(sin(a))))
+            rightLayer.stroke(ray, with: .color(Color(red: 1, green: 0.85, blue: 0.4).opacity(0.5 * Double(dawn))), lineWidth: 0.8)
+        }
+        rightLayer.fill(Path(ellipseIn: CGRect(x: sunX - 5, y: sunY - 5, width: 10, height: 10)), with: .color(Color(red: 1, green: 0.85, blue: 0.35)))
+        // Дальние горы справа
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: zones.right.minX, y: ground)); p.addLine(to: CGPoint(x: zones.right.minX + 9, y: ground - 10)); p.addLine(to: CGPoint(x: zones.right.minX + 15, y: ground - 5))
+            p.addLine(to: CGPoint(x: zones.right.minX + 24, y: ground - 13)); p.addLine(to: CGPoint(x: zones.right.maxX, y: ground - 4)); p.addLine(to: CGPoint(x: zones.right.maxX, y: ground)); p.closeSubpath()
+        }, with: .color(Color(red: 0.14, green: 0.12, blue: 0.25)))
+        // Птицы
+        for k in 0..<2 {
+            let bx = zones.right.minX + CGFloat(idleWrap(t * (4 + Double(k)) + Double(k) * 14, Double(zones.right.width + 10))) - 5
+            let by = 6 + CGFloat(k) * 6 + CGFloat(sin(t * 2 + Double(k))) * 1.2
+            let flap = CGFloat(sin(t * 9 + Double(k))) * 1.2
+            context.stroke(Path { p in
+                p.move(to: CGPoint(x: bx - 2.4, y: by + flap)); p.addQuadCurve(to: CGPoint(x: bx, y: by), control: CGPoint(x: bx - 1, y: by - 1.6))
+                p.addQuadCurve(to: CGPoint(x: bx + 2.4, y: by + flap), control: CGPoint(x: bx + 1, y: by - 1.6))
+            }, with: .color(Color(white: 0.9).opacity(0.85)), lineWidth: 0.8)
+        }
+
+        // Гора слева
+        let apex = CGPoint(x: zone.midX + 3, y: 4.5)
+        let mountain = Path { p in
+            p.move(to: CGPoint(x: zone.minX, y: ground)); p.addLine(to: CGPoint(x: apex.x - 5, y: apex.y + 9)); p.addLine(to: CGPoint(x: apex.x - 2, y: apex.y + 6))
+            p.addLine(to: apex); p.addLine(to: CGPoint(x: apex.x + 5, y: apex.y + 10)); p.addLine(to: CGPoint(x: zone.maxX, y: ground)); p.closeSubpath()
+        }
+        context.fill(mountain, with: .color(Color(red: 0.3, green: 0.3, blue: 0.4)))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: apex.x - 3.4, y: apex.y + 5)); p.addLine(to: apex); p.addLine(to: CGPoint(x: apex.x + 3.4, y: apex.y + 6.2))
+            p.addLine(to: CGPoint(x: apex.x + 1, y: apex.y + 4.6)); p.addLine(to: CGPoint(x: apex.x - 1, y: apex.y + 6)); p.closeSubpath()
+        }, with: .color(.white))
+
+        // Тропа серпантином
+        let trail: [CGPoint] = [
+            CGPoint(x: zone.minX + 3, y: ground - 0.5), CGPoint(x: zone.minX + 17, y: ground - 5.5), CGPoint(x: zone.minX + 9, y: ground - 11),
+            CGPoint(x: zone.minX + 21, y: ground - 16), CGPoint(x: zone.minX + 15, y: ground - 21), apex,
+        ]
+        var path = Path()
+        path.move(to: trail[0])
+        for point in trail.dropFirst() { path.addLine(to: point) }
+        context.stroke(path, with: .color(.white.opacity(0.35)), style: StrokeStyle(lineWidth: 0.8, dash: [1.6, 1.6]))
+
+        // Положение альпиниста: идёт 13 секунд с остановками на поворотах
+        let climb = CGFloat(min(1, max(0, (local - 0.5) / 13)))
+        var lengths: [CGFloat] = []
+        for i in 1..<trail.count { lengths.append(hypot(trail[i].x - trail[i - 1].x, trail[i].y - trail[i - 1].y)) }
+        let total = lengths.reduce(0, +)
+        var remain = climb * total
+        var pos = trail[0]
+        for i in 0..<lengths.count {
+            if remain <= lengths[i] {
+                let k = lengths[i] > 0 ? remain / lengths[i] : 0
+                pos = CGPoint(x: trail[i].x + (trail[i + 1].x - trail[i].x) * k, y: trail[i].y + (trail[i + 1].y - trail[i].y) * k)
+                break
+            }
+            remain -= lengths[i]
+            pos = trail[i + 1]
+        }
+        let atTop = climb >= 1
+        let stepBob = atTop ? 0 : abs(CGFloat(sin(t * 9))) * 0.8
+        let hero = CGPoint(x: pos.x, y: pos.y - stepBob)
+        context.fill(Path(roundedRect: CGRect(x: hero.x - 1.2, y: hero.y - 4.2, width: 2.4, height: 3), cornerRadius: 0.6), with: .color(Color(red: 0.9, green: 0.25, blue: 0.25).opacity(fadeOut)))
+        context.fill(Path(ellipseIn: CGRect(x: hero.x - 1.1, y: hero.y - 6, width: 2.2, height: 2.2)), with: .color(Color(red: 1, green: 0.8, blue: 0.62).opacity(fadeOut)))
+        context.fill(Path(CGRect(x: hero.x - 2.2, y: hero.y - 4, width: 1.2, height: 2.4)), with: .color(Color(red: 0.3, green: 0.4, blue: 0.9).opacity(fadeOut)))
+        let legs = atTop ? 0 : CGFloat(sin(t * 9)) * 0.9
+        context.fill(Path(CGRect(x: hero.x - 1 + legs, y: hero.y - 1.2, width: 0.9, height: 1.4)), with: .color(Color(white: 0.2).opacity(fadeOut)))
+        context.fill(Path(CGRect(x: hero.x + 0.2 - legs, y: hero.y - 1.2, width: 0.9, height: 1.4)), with: .color(Color(white: 0.2).opacity(fadeOut)))
+        if atTop {
+            // Руки вверх и флаг на вершине
+            let cheer = CGFloat(sin(t * 8)) * 0.6
+            context.stroke(Path { p in
+                p.move(to: CGPoint(x: hero.x - 1.2, y: hero.y - 3.8)); p.addLine(to: CGPoint(x: hero.x - 2.4, y: hero.y - 7 + cheer))
+                p.move(to: CGPoint(x: hero.x + 1.2, y: hero.y - 3.8)); p.addLine(to: CGPoint(x: hero.x + 2.4, y: hero.y - 7 - cheer))
+            }, with: .color(Color(red: 1, green: 0.8, blue: 0.62).opacity(fadeOut)), lineWidth: 0.8)
+            context.fill(Path(CGRect(x: apex.x + 2.5, y: apex.y - 6, width: 0.8, height: 8)), with: .color(Color(white: 0.85).opacity(fadeOut)))
+            var cloth = Path()
+            cloth.move(to: CGPoint(x: apex.x + 3.3, y: apex.y - 6))
+            for i in 0...5 {
+                let x = apex.x + 3.3 + CGFloat(i) * 1.1
+                cloth.addLine(to: CGPoint(x: x, y: apex.y - 6 + CGFloat(sin(t * 6 - Double(i))) * 0.7 * CGFloat(i) / 5))
+            }
+            for i in stride(from: 5, through: 0, by: -1) {
+                let x = apex.x + 3.3 + CGFloat(i) * 1.1
+                cloth.addLine(to: CGPoint(x: x, y: apex.y - 3 + CGFloat(sin(t * 6 - Double(i))) * 0.7 * CGFloat(i) / 5))
+            }
+            cloth.closeSubpath()
+            context.fill(cloth, with: .color(Color(red: 1, green: 0.3, blue: 0.4).opacity(fadeOut)))
+            // Конфетти
+            let since = local - 13.5
+            if since > 0, since < 3 {
+                for k in 0..<12 {
+                    let a = Double(k) / 12 * 2 * .pi
+                    let r = CGFloat(since) * 7 + 2
+                    let px = apex.x + CGFloat(cos(a)) * r
+                    let py = apex.y + 2 + CGFloat(sin(a)) * r * 0.8 + CGFloat(since * since) * 3
+                    context.fill(Path(CGRect(x: px, y: py, width: 1.4, height: 1.4)), with: .color([Color.yellow, .pink, .cyan, .green][k % 4].opacity(Double(max(0, 1 - since / 3)))))
+                }
+            }
+        }
+    }
+}
+
+// MARK: Новый уровень
+
+/// RPG: слева значок уровня, вокруг него копится опыт; каждые 18 секунд — вспышка «LEVEL UP!» и новое число; справа всплывают «+XP» и растут характеристики
+private enum IdleLevelUp {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let cycle = 18.0
+        let number = Int(floor(t / cycle))
+        let local = t - Double(number) * cycle
+        let level = 7 + number
+        let gold = Color(red: 1, green: 0.82, blue: 0.25)
+
+        // События опыта: 6 раз за цикл, каждое добавляет шестую часть шкалы
+        let eventTimes = (0..<6).map { 1.5 + Double($0) * 2.3 }
+        var progress: CGFloat = 0
+        for (i, time) in eventTimes.enumerated() {
+            let k = CGFloat(min(1, max(0, (local - time) / 0.5)))
+            progress += k * k * (3 - 2 * k) / 6
+            _ = i
+        }
+        let levelUp = local - 14
+        let c = CGPoint(x: zones.left.midX, y: h * 0.5)
+        let r: CGFloat = 11
+
+        // Шкала опыта вокруг значка
+        context.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(.white.opacity(0.15)), lineWidth: 2.6)
+        var arc = Path()
+        arc.addArc(center: c, radius: r, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * Double(progress)), clockwise: false)
+        context.stroke(arc, with: .color(gold.opacity(0.35)), style: StrokeStyle(lineWidth: 4.4, lineCap: .round))
+        context.stroke(arc, with: .color(gold), style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+        context.fill(Path(ellipseIn: CGRect(x: c.x - 8.4, y: c.y - 8.4, width: 16.8, height: 16.8)), with: .color(Color(red: 0.2, green: 0.12, blue: 0.4)))
+        // Число уровня: подпрыгивает при повышении
+        var numberScale: CGFloat = 1
+        if levelUp > 0, levelUp < 0.7 { numberScale = 1 + 0.45 * CGFloat(sin(levelUp / 0.7 * .pi)) }
+        let shown = local < 14 ? level : level + 1
+        var layer = context
+        layer.translateBy(x: c.x, y: c.y + 0.5)
+        layer.scaleBy(x: numberScale, y: numberScale)
+        layer.draw(Text("\(shown)").font(.system(size: 11, weight: .heavy, design: .rounded)).foregroundColor(.white), at: .zero)
+        context.draw(Text("LV").font(.system(size: 4.6, weight: .heavy, design: .rounded)).foregroundColor(gold), at: CGPoint(x: c.x, y: c.y - 6))
+
+        // Вспышка повышения уровня: расходящееся кольцо и лучи
+        if levelUp > 0, levelUp < 1.6 {
+            let q = CGFloat(levelUp / 1.6)
+            context.stroke(Path(ellipseIn: CGRect(x: c.x - r - q * 12, y: c.y - r - q * 12, width: (r + q * 12) * 2, height: (r + q * 12) * 2)),
+                           with: .color(gold.opacity(Double(1 - q))), lineWidth: 2 * (1 - q))
+            for k in 0..<10 {
+                let a = Double(k) / 10 * 2 * .pi
+                var ray = Path()
+                ray.move(to: CGPoint(x: c.x + (r + 2) * CGFloat(cos(a)), y: c.y + (r + 2) * CGFloat(sin(a))))
+                ray.addLine(to: CGPoint(x: c.x + (r + 2 + q * 8) * CGFloat(cos(a)), y: c.y + (r + 2 + q * 8) * CGFloat(sin(a))))
+                context.stroke(ray, with: .color(.white.opacity(Double(1 - q))), lineWidth: 1)
+            }
+        }
+
+        // Справа: всплывающие «+XP»
+        for (i, time) in eventTimes.enumerated() {
+            let age = local - time
+            guard age > 0, age < 1.6 else { continue }
+            let q = CGFloat(age / 1.6)
+            let x = zones.right.midX - 4 + CGFloat(i % 3) * 5
+            context.draw(Text("+\(10 + i * 5)").font(.system(size: 7.5, weight: .heavy, design: .rounded)).foregroundColor(gold.opacity(Double(1 - q))),
+                         at: CGPoint(x: x, y: h * 0.45 - q * 10))
+            // Звёздочка рядом
+            var star = Path()
+            let sx = x + 8, sy = h * 0.45 - q * 10
+            let sr = 1.8 * (1 - q)
+            star.move(to: CGPoint(x: sx - sr, y: sy)); star.addLine(to: CGPoint(x: sx + sr, y: sy))
+            star.move(to: CGPoint(x: sx, y: sy - sr)); star.addLine(to: CGPoint(x: sx, y: sy + sr))
+            context.stroke(star, with: .color(.white.opacity(Double(1 - q))), lineWidth: 0.8)
+        }
+        // Характеристики: три полоски растут по ходу цикла и «щёлкают» на повышении
+        let colors: [Color] = [Color(red: 1, green: 0.4, blue: 0.4), Color(red: 0.4, green: 0.9, blue: 0.5), Color(red: 0.4, green: 0.7, blue: 1)]
+        for (k, color) in colors.enumerated() {
+            let y = h - 15 + CGFloat(k) * 4
+            let base = 0.25 + 0.12 * Double(k)
+            let fill = CGFloat(min(1, base + 0.5 * Double(progress)))
+            context.fill(Path(roundedRect: CGRect(x: zones.right.minX + 4, y: y, width: 28, height: 2.2), cornerRadius: 1.1), with: .color(.white.opacity(0.1)))
+            context.fill(Path(roundedRect: CGRect(x: zones.right.minX + 4, y: y, width: 28 * fill, height: 2.2), cornerRadius: 1.1), with: .color(color))
+            if levelUp > 0, levelUp < 0.8 {
+                context.fill(Path(roundedRect: CGRect(x: zones.right.minX + 4, y: y, width: 28 * fill, height: 2.2), cornerRadius: 1.1), with: .color(.white.opacity(0.7 * Double(1 - CGFloat(levelUp) / 0.8))))
+            }
+        }
+    }
+}
+
+// MARK: Бегущая строка
+
+/// Неоновая бегущая строка с девизами проходит через всю чёлку: «никогда не сдавайся», «мечтай по-крупному», «начни сейчас»
+private enum IdleTicker {
+    static let slogans: [(String, Color)] = [
+        ("🔥 NEVER GIVE UP", Color(red: 1, green: 0.55, blue: 0.2)),
+        ("💪 WORK HARD", Color(red: 0.3, green: 0.9, blue: 1)),
+        ("🚀 DREAM BIG", Color(red: 1, green: 0.4, blue: 0.75)),
+        ("⭐ STAY HUNGRY", Color(red: 1, green: 0.88, blue: 0.3)),
+        ("🏆 NO EXCUSES", Color(red: 0.45, green: 1, blue: 0.55)),
+        ("⚡ START NOW", Color(red: 0.75, green: 0.55, blue: 1)),
+    ]
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let gap: CGFloat = 22
+        // Ширина каждого девиза
+        var widths: [CGFloat] = []
+        for (text, color) in slogans {
+            let resolved = context.resolve(Text(text).font(.system(size: 9.5, weight: .heavy, design: .rounded)).foregroundColor(color))
+            widths.append(resolved.measure(in: CGSize(width: 400, height: 40)).width)
+        }
+        let total = widths.reduce(0, +) + gap * CGFloat(slogans.count)
+        let offset = CGFloat(idleWrap(t * 26, Double(total)))
+
+        for pass in 0..<2 {
+            var x = -offset + CGFloat(pass) * total
+            for (index, slogan) in slogans.enumerated() {
+                let width = widths[index]
+                if x + width > -4, x < w + 4 {
+                    let text = Text(slogan.0).font(.system(size: 9.5, weight: .heavy, design: .rounded)).foregroundColor(slogan.1)
+                    let y = h / 2 + CGFloat(sin(t * 3 + Double(index))) * 0.6
+                    context.drawLayer { layer in
+                        layer.addFilter(.blur(radius: 2.4))
+                        layer.opacity = 0.85
+                        layer.draw(Text(slogan.0).font(.system(size: 9.5, weight: .heavy, design: .rounded)).foregroundColor(slogan.1), at: CGPoint(x: x, y: y), anchor: .leading)
+                    }
+                    context.draw(text, at: CGPoint(x: x, y: y), anchor: .leading)
+                }
+                x += width + gap
+            }
+        }
+        // Бегущие огоньки по нижней кромке — как у неоновой вывески
+        var lx = -CGFloat(idleWrap(t * 30, 8))
+        while lx < w {
+            context.fill(Path(ellipseIn: CGRect(x: lx, y: h - 2.4, width: 1.6, height: 1.6)), with: .color(.white.opacity(0.45)))
+            lx += 8
         }
     }
 }
