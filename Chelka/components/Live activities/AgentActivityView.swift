@@ -17,6 +17,7 @@ struct AgentBadge: View {
     @ObservedObject private var manager = AgentActivityManager.shared
     @Default(.agentRunningStyle) private var runningStyle
     @Default(.doneStyle) private var doneStyle
+    @Default(.agentColorHex) private var colorHex   // подписка: при смене цвета значок перерисуется
     @State private var rippleStart: Date?
     @State private var doneProgress: Double = 0
     @State private var wobble: Double = 0

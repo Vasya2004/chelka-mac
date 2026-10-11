@@ -245,6 +245,8 @@ extension Defaults.Keys {
     static let doneStyle = Key<DoneStyle>("doneStyle", default: .check)
     static let idleStyle = Key<IdleStyle>("idleStyle", default: .cat)
     static let musicVisualStyle = Key<MusicVisualStyle>("musicVisualStyle", default: .classic)
+    /// Цвет анимации работающей нейросети в виде «#RRGGBB»; пусто — белый по умолчанию
+    static let agentColorHex = Key<String>("agentColorHex", default: "")
     static let playLockSound = Key<Bool>("playLockSound", default: true)
     static let hideFromScreenRecording = Key<Bool>("hideFromScreenRecording", default: false)
     

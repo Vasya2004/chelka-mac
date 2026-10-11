@@ -38,7 +38,7 @@ extension AgentStatus {
     /// Работа — нейтральный белый, цветные акценты только там, где нужно внимание
     var tint: Color {
         switch self {
-        case .running: return Color.white.opacity(0.92)
+        case .running: return AgentColor.running
         case .waiting: return Color(red: 1.0, green: 0.72, blue: 0.26)
         case .done: return Color(red: 0.38, green: 0.84, blue: 0.56)
         case .error: return Color(red: 1.0, green: 0.42, blue: 0.42)
@@ -787,5 +787,36 @@ enum AgentJumper {
         if let script {
             Task { try? await AppleScriptHelper.executeVoid(script) }
         }
+    }
+}
+
+
+/// Цвет анимации работающей нейросети: выбирается в Settings → Animations (пусто — белый)
+enum AgentColor {
+    static let presets: [(name: String, hex: String)] = [
+        ("White", ""), ("Cyan", "#4FD8FF"), ("Violet", "#A78BFA"), ("Pink", "#FF6FB5"),
+        ("Green", "#5CE08A"), ("Yellow", "#FFD84D"), ("Orange", "#FFA94D"), ("Red", "#FF6B6B"),
+    ]
+
+    static let defaultColor = Color.white.opacity(0.92)
+
+    static var running: Color { color(hex: Defaults[.agentColorHex]) }
+
+    static func color(hex: String) -> Color {
+        guard let ns = nsColor(hex: hex) else { return defaultColor }
+        return Color(nsColor: ns)
+    }
+
+    static func nsColor(hex: String) -> NSColor? {
+        var text = hex.trimmingCharacters(in: .whitespaces)
+        if text.hasPrefix("#") { text.removeFirst() }
+        guard text.count == 6, let value = UInt32(text, radix: 16) else { return nil }
+        return NSColor(srgbRed: CGFloat((value >> 16) & 0xFF) / 255, green: CGFloat((value >> 8) & 0xFF) / 255,
+                       blue: CGFloat(value & 0xFF) / 255, alpha: 1)
+    }
+
+    static func hex(from color: Color) -> String {
+        guard let ns = NSColor(color).usingColorSpace(.sRGB) else { return "" }
+        return String(format: "#%02X%02X%02X", Int((ns.redComponent * 255).rounded()), Int((ns.greenComponent * 255).rounded()), Int((ns.blueComponent * 255).rounded()))
     }
 }

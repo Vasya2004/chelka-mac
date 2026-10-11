@@ -16,15 +16,56 @@ struct AnimationSettings: View {
     @Default(.doneStyle) private var doneStyle
     @Default(.idleStyle) private var idleStyle
     @Default(.musicVisualStyle) private var musicVisual
+    @Default(.agentColorHex) private var agentColorHex
     @ObservedObject private var music = MusicManager.shared
     /// Момент «начала работы» для превью таймера
     @State private var previewStart = Date().addingTimeInterval(-74)
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 12)]
-    private let white = Color.white.opacity(0.92)
+    /// Цвет анимации нейросети из настроек (по умолчанию белый): в превью ниже все варианты показываются им
+    private var white: Color { AgentColor.color(hex: agentColorHex) }
+
+    /// Выбор цвета: готовые образцы и свой цвет из палитры
+    private var colorSection: some View {
+        Section {
+            HStack(spacing: 10) {
+                ForEach(AgentColor.presets, id: \.name) { preset in
+                    let selected = agentColorHex.lowercased() == preset.hex.lowercased()
+                    Button {
+                        agentColorHex = preset.hex
+                    } label: {
+                        Circle()
+                            .fill(AgentColor.color(hex: preset.hex))
+                            .frame(width: 22, height: 22)
+                            .overlay(Circle().stroke(Color.primary.opacity(0.25), lineWidth: 1))
+                            .overlay(Circle().stroke(Color.effectiveAccent, lineWidth: selected ? 2.5 : 0).padding(-3))
+                    }
+                    .buttonStyle(.plain)
+                    .help(preset.name)
+                }
+                Divider().frame(height: 20)
+                ColorPicker("Custom", selection: Binding(
+                    get: { AgentColor.color(hex: agentColorHex) },
+                    set: { agentColorHex = AgentColor.hex(from: $0) }
+                ), supportsOpacity: false)
+                .labelsHidden()
+                .help("Pick any color")
+                Spacer()
+                Button("Reset") { agentColorHex = "" }
+                    .disabled(agentColorHex.isEmpty)
+            }
+            .padding(.vertical, 2)
+        } header: {
+            Text("Agent animation color")
+        } footer: {
+            Text("The color of the animation while an AI agent is working. Waiting, finished and error states keep their own colors.")
+        }
+    }
 
     var body: some View {
         Form {
+            colorSection
+
             Section {
                 LazyVGrid(columns: columns, spacing: 14) {
                     ForEach(AgentRunningStyle.allCases) { style in
@@ -166,6 +207,7 @@ struct AnimationSettings: View {
                     doneStyle = .check
                     idleStyle = .cat
                     musicVisual = .classic
+                    agentColorHex = ""
                 }
             }
         }
