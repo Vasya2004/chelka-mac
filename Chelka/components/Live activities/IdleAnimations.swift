@@ -95,6 +95,12 @@ struct IdleArt: View {
             case .summit: IdleSummit.draw(in: &context, zones: zones, t: t)
             case .levelUp: IdleLevelUp.draw(in: &context, zones: zones, t: t)
             case .ticker: IdleTicker.draw(in: &context, zones: zones, t: t)
+            case .gym: IdleGym.draw(in: &context, zones: zones, t: t)
+            case .finish: IdleFinish.draw(in: &context, zones: zones, t: t)
+            case .streak: IdleStreak.draw(in: &context, zones: zones, t: t)
+            case .pawn: IdlePawn.draw(in: &context, zones: zones, t: t)
+            case .bullseye: IdleBullseye.draw(in: &context, zones: zones, t: t)
+            case .grind: IdleGrind.draw(in: &context, zones: zones, t: t)
             }
         }
     }
@@ -4075,5 +4081,596 @@ private enum IdleTicker {
             context.fill(Path(ellipseIn: CGRect(x: lx, y: h - 2.4, width: 1.6, height: 1.6)), with: .color(.white.opacity(0.45)))
             lx += 8
         }
+    }
+}
+
+// MARK: Зал
+
+/// Атлет жмёт штангу над головой — повторение за повторением; справа табло считает подходы, а на последнем вспыхивает «NEW PR!»
+private enum IdleGym {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let ground = h - 3
+        let repTime = 2.4
+        let reps = 8
+        let cycle = repTime * Double(reps) + 3
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let active = local < repTime * Double(reps)
+        let rep = min(reps, Int(local / repTime) + 1)
+        let phase = active ? (local.truncatingRemainder(dividingBy: repTime)) / repTime : 0
+        // Подъём 0…0.45, пауза наверху, опускание 0.55…1
+        let lift: Double = phase < 0.45 ? phase / 0.45 : (phase < 0.55 ? 1 : (1 - phase) / 0.45)
+        let ease = CGFloat(lift * lift * (3 - 2 * lift))
+        let accent = Color(red: 1, green: 0.45, blue: 0.2)
+        let skin = Color(red: 1, green: 0.8, blue: 0.62)
+
+        // Пол — резиновый коврик
+        context.fill(Path(CGRect(x: 0, y: ground, width: zones.size.width, height: 3)), with: .color(Color(white: 0.14)))
+        let cx = zones.left.midX
+        // Фигура
+        let hipY = ground - 9, shoulderY = ground - 19
+        let strain = CGFloat(0.4 * Double(ease))
+        context.stroke(Path { p in
+            p.move(to: CGPoint(x: cx - 1, y: hipY)); p.addLine(to: CGPoint(x: cx - 4.5, y: ground))
+            p.move(to: CGPoint(x: cx + 1, y: hipY)); p.addLine(to: CGPoint(x: cx + 4.5, y: ground))
+        }, with: .color(Color(red: 0.25, green: 0.35, blue: 0.7)), style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+        context.stroke(Path { p in p.move(to: CGPoint(x: cx, y: hipY)); p.addLine(to: CGPoint(x: cx, y: shoulderY)) },
+                       with: .color(accent), style: StrokeStyle(lineWidth: 4.2, lineCap: .round))
+        context.fill(Path(ellipseIn: CGRect(x: cx - 2.4, y: shoulderY - 6.4 - strain, width: 4.8, height: 4.8)), with: .color(skin))
+        // Штанга и руки
+        let barY = (ground - 16) - ease * 10.5
+        for side in [-1.0, 1.0] {
+            let sx = cx + CGFloat(side) * 2.4
+            let hand = CGPoint(x: cx + CGFloat(side) * 5.2, y: barY)
+            let elbow = CGPoint(x: cx + CGFloat(side) * 7.2, y: (shoulderY + barY) / 2 + 1.5)
+            context.stroke(Path { p in p.move(to: CGPoint(x: sx, y: shoulderY)); p.addLine(to: elbow); p.addLine(to: hand) },
+                           with: .color(skin), style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+        }
+        context.stroke(Path { p in p.move(to: CGPoint(x: cx - 11.5, y: barY)); p.addLine(to: CGPoint(x: cx + 11.5, y: barY)) },
+                       with: .color(Color(white: 0.85)), lineWidth: 1.3)
+        for side in [-1.0, 1.0] {
+            let px = cx + CGFloat(side) * 10.5
+            context.fill(Path(roundedRect: CGRect(x: px - 1.6, y: barY - 4.4, width: 3.2, height: 8.8), cornerRadius: 1), with: .color(Color(white: 0.2)))
+            context.fill(Path(roundedRect: CGRect(x: px - 1.6 + CGFloat(side) * 2.4, y: barY - 3, width: 2, height: 6), cornerRadius: 0.8), with: .color(accent))
+        }
+        // Пот на пике усилия
+        if lift > 0.8 {
+            for k in 0..<3 {
+                let age = idleWrap(t * 2 + Double(k) / 3, 1)
+                context.fill(Path(ellipseIn: CGRect(x: cx + 3 + CGFloat(k) * 2.2, y: shoulderY - 6 + CGFloat(age) * 6, width: 1.2, height: 1.7)),
+                             with: .color(Color(red: 0.6, green: 0.85, blue: 1).opacity(1 - age)))
+            }
+        }
+
+        // Табло справа
+        let board = zones.right
+        context.fill(Path(roundedRect: CGRect(x: board.minX + 3, y: 4, width: board.width - 6, height: 22), cornerRadius: 3), with: .color(Color(white: 0.09)))
+        context.stroke(Path(roundedRect: CGRect(x: board.minX + 3, y: 4, width: board.width - 6, height: 22), cornerRadius: 3), with: .color(accent.opacity(0.7)), lineWidth: 0.8)
+        let done = !active
+        context.draw(Text(done ? "PR" : "\(rep)").font(.system(size: done ? 12 : 13, weight: .heavy, design: .monospaced))
+                        .foregroundColor(done ? Color(red: 1, green: 0.85, blue: 0.3) : .white), at: CGPoint(x: board.midX, y: 12.5))
+        // Отметки подходов
+        for k in 0..<reps {
+            let lit = k < rep - (active ? 1 : 0) + (done ? 1 : 0) || (active && k == rep - 1 && phase > 0.5)
+            context.fill(Path(roundedRect: CGRect(x: board.minX + 6 + CGFloat(k) * 3.2, y: 20.5, width: 2.2, height: 2.6), cornerRadius: 0.6),
+                         with: .color(lit ? accent : Color(white: 0.25)))
+        }
+        // Победная вспышка: «NEW PR!» и искры
+        if done {
+            let q = local - repTime * Double(reps)
+            context.draw(Text("NEW PR!").font(.system(size: 6.5, weight: .heavy, design: .rounded)).foregroundColor(Color(red: 1, green: 0.85, blue: 0.3).opacity(Double(abs(sin(q * 5))))),
+                         at: CGPoint(x: board.midX, y: 30))
+            for k in 0..<6 {
+                let a = Double(k) * 1.05 + q * 2
+                var spark = Path()
+                let c = CGPoint(x: board.midX + CGFloat(cos(a)) * (10 + CGFloat(q) * 3), y: 15 + CGFloat(sin(a)) * 9)
+                spark.move(to: CGPoint(x: c.x - 1.4, y: c.y)); spark.addLine(to: CGPoint(x: c.x + 1.4, y: c.y))
+                spark.move(to: CGPoint(x: c.x, y: c.y - 1.4)); spark.addLine(to: CGPoint(x: c.x, y: c.y + 1.4))
+                context.stroke(spark, with: .color(Color(red: 1, green: 0.9, blue: 0.4).opacity(0.9)), lineWidth: 0.8)
+            }
+        }
+    }
+}
+
+// MARK: Финиш
+
+/// Бегун мчится сквозь чёлку к финишу, рвёт ленту на другой стороне, взлетает конфетти, секундомер замирает на победном времени
+private enum IdleFinish {
+    private static func runner(_ context: inout GraphicsContext, x: CGFloat, ground: CGFloat, t: Double, cheering: Bool, scale: CGFloat) {
+        let phase = t * 14
+        let hipY = ground - 8 * scale
+        let shoulderY = ground - 15 * scale
+        let lean: CGFloat = cheering ? 0 : 2.2 * scale
+        let shirt = Color(red: 1, green: 0.4, blue: 0.2)
+        let skin = Color(red: 1, green: 0.8, blue: 0.62)
+        // Ноги
+        for side in [0.0, 1.0] {
+            let swing = CGFloat(sin(phase + side * .pi)) * (cheering ? 0 : 1)
+            let knee = CGPoint(x: x + swing * 3.2 * scale, y: hipY + 3.4 * scale - max(0, -swing) * 1.4 * scale)
+            let foot = CGPoint(x: x + swing * 5.4 * scale, y: ground - max(0, swing) * 1.8 * scale)
+            context.stroke(Path { p in p.move(to: CGPoint(x: x, y: hipY)); p.addLine(to: knee); p.addLine(to: foot) },
+                           with: .color(Color(red: 0.2, green: 0.3, blue: 0.7)), style: StrokeStyle(lineWidth: 2 * scale, lineCap: .round, lineJoin: .round))
+        }
+        // Корпус и голова
+        context.stroke(Path { p in p.move(to: CGPoint(x: x, y: hipY)); p.addLine(to: CGPoint(x: x + lean, y: shoulderY)) },
+                       with: .color(shirt), style: StrokeStyle(lineWidth: 3.6 * scale, lineCap: .round))
+        context.fill(Path(ellipseIn: CGRect(x: x + lean - 2.1 * scale, y: shoulderY - 5.4 * scale, width: 4.2 * scale, height: 4.2 * scale)), with: .color(skin))
+        // Руки: бегут или подняты вверх
+        for side in [0.0, 1.0] {
+            let swing = CGFloat(sin(phase + side * .pi + .pi))
+            let shoulder = CGPoint(x: x + lean, y: shoulderY + 0.8 * scale)
+            let hand = cheering ? CGPoint(x: x + (side == 0 ? -4 : 4) * scale, y: shoulderY - 7 * scale) : CGPoint(x: x + lean + swing * 4.4 * scale, y: shoulderY + 4 * scale - abs(swing) * 1.2 * scale)
+            context.stroke(Path { p in p.move(to: shoulder); p.addLine(to: hand) }, with: .color(skin), style: StrokeStyle(lineWidth: 1.6 * scale, lineCap: .round))
+        }
+    }
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let ground = h - 3
+        let cycle = 14.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let startX: CGFloat = 12
+        let finishX = w - 18
+        let gold = Color(red: 1, green: 0.85, blue: 0.3)
+
+        // Беговая дорожка с разметкой
+        context.fill(Path(CGRect(x: 0, y: ground, width: w, height: 3)), with: .color(Color(red: 0.6, green: 0.2, blue: 0.2)))
+        for k in 0..<12 { context.fill(Path(CGRect(x: CGFloat(k) * 20, y: ground + 1.2, width: 8, height: 0.6)), with: .color(.white.opacity(0.5))) }
+
+        // Старт и финиш: чёрно-белая клетка
+        for (x, label) in [(startX - 2, true), (finishX, false)] {
+            _ = label
+            for r in 0..<6 {
+                for c in 0..<2 {
+                    context.fill(Path(CGRect(x: x + CGFloat(c) * 2, y: ground - 12 + CGFloat(r) * 2, width: 2, height: 2)), with: .color((r + c) % 2 == 0 ? .white : Color(white: 0.1)))
+                }
+            }
+        }
+        // Лента на финише рвётся
+        let run = CGFloat(min(1, max(0, (local - 0.6) / 4)))
+        let eased = run * run * (3 - 2 * run) * 0.5 + run * 0.5
+        let x = startX + (finishX + 3 - startX) * eased
+        let broken = local > 4.6
+        let ribbon = Color(red: 1, green: 0.3, blue: 0.4)
+        if !broken {
+            context.stroke(Path { p in p.move(to: CGPoint(x: finishX + 3, y: ground - 9)); p.addLine(to: CGPoint(x: finishX + 3 + 6, y: ground - 9)) }, with: .color(ribbon), lineWidth: 1.6)
+        } else {
+            let q = CGFloat(min(1, (local - 4.6) / 1.2))
+            for dir in [-1.0, 1.0] {
+                context.stroke(Path { p in
+                    p.move(to: CGPoint(x: finishX + 6, y: ground - 9)); p.addQuadCurve(to: CGPoint(x: finishX + 6 + CGFloat(dir) * 5, y: ground - 9 + q * 8), control: CGPoint(x: finishX + 6 + CGFloat(dir) * 3, y: ground - 9 + q * 2))
+                }, with: .color(ribbon.opacity(Double(1 - q * 0.4))), lineWidth: 1.4)
+            }
+        }
+
+        // Бегун: бежит до финиша и поднимает руки
+        let finished = local > 4.6
+        if local > 0.2, local < 12.5 {
+            runner(&context, x: finished ? finishX + 8 : x, ground: ground, t: t, cheering: finished, scale: 0.95)
+        } else if local <= 0.2 {
+            runner(&context, x: startX, ground: ground, t: 0, cheering: false, scale: 0.95)
+        }
+
+        // Секундомер: идёт до финиша, потом зелёный
+        let time = min(local - 0.6, 4.0) + 38
+        let shown = local < 0.6 ? 38.0 : max(38, time)
+        let stopwatch = String(format: "0:%04.1f", shown)
+        context.draw(Text(stopwatch).font(.system(size: 7.5, weight: .heavy, design: .monospaced))
+                        .foregroundColor(finished ? Color(red: 0.4, green: 1, blue: 0.55) : .white),
+                     at: CGPoint(x: zones.left.midX - 2, y: 5.5))
+
+        // Конфетти из хлопушек у финиша
+        let since = local - 4.6
+        if since > 0, since < 4 {
+            for k in 0..<22 {
+                let a = -.pi / 2 + (Double(k) / 22 - 0.5) * 2.2
+                let v = 12 + 18 * idleRandom(k + 55)
+                let px = finishX + 6 + CGFloat(cos(a) * v * since)
+                let py = ground - 8 + CGFloat(sin(a) * v * since + 16 * since * since)
+                context.fill(Path(CGRect(x: px, y: py, width: 1.6, height: 1.6)),
+                             with: .color([Color.yellow, .pink, .cyan, .green, .orange][k % 5].opacity(Double(max(0, 1 - since / 4)))))
+            }
+            context.draw(Text("🏅").font(.system(size: 8)), at: CGPoint(x: zones.right.midX + 3, y: 8 + CGFloat(sin(t * 4)) * 1.2))
+            _ = gold
+        }
+    }
+}
+
+// MARK: Серия
+
+/// Календарь привычки: клетки отмечаются одна за другой, справа пламя серии растёт вместе со счётчиком дней; когда серия выполнена, салют
+private enum IdleStreak {
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let h = zones.size.height
+        let total = 28
+        let step = 0.42
+        let fill = Double(total) * step
+        let cycle = fill + 4.5
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let done = Int(min(Double(total), local / step))
+        let finished = local >= fill
+        let green = Color(red: 0.3, green: 0.9, blue: 0.5)
+        let orange = Color(red: 1, green: 0.5, blue: 0.15)
+
+        // Календарь 7×4
+        let origin = CGPoint(x: zones.left.minX + 3, y: (h - (4 * 5.4 - 1)) / 2 + 1)
+        for index in 0..<total {
+            let col = index % 7, row = index / 7
+            let rect = CGRect(x: origin.x + CGFloat(col) * 4.9, y: origin.y + CGFloat(row) * 5.4, width: 4, height: 4.4)
+            if index < done {
+                let age = local - Double(index) * step
+                let pop = age < 0.3 ? 1 + 0.35 * CGFloat(sin(age / 0.3 * .pi)) : 1
+                let r = rect.insetBy(dx: -(pop - 1) * 2, dy: -(pop - 1) * 2)
+                context.fill(Path(roundedRect: r, cornerRadius: 1), with: .color(green))
+                var check = Path()
+                check.move(to: CGPoint(x: r.minX + 0.9, y: r.midY)); check.addLine(to: CGPoint(x: r.midX - 0.2, y: r.maxY - 1)); check.addLine(to: CGPoint(x: r.maxX - 0.8, y: r.minY + 1))
+                context.stroke(check, with: .color(.white), style: StrokeStyle(lineWidth: 0.7, lineCap: .round, lineJoin: .round))
+            } else {
+                let today = index == done && !finished
+                context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(.white.opacity(today ? 0.12 + 0.18 * abs(sin(t * 4)) : 0.08)))
+                if today { context.stroke(Path(roundedRect: rect, cornerRadius: 1), with: .color(green.opacity(0.8)), lineWidth: 0.6) }
+            }
+        }
+
+        // Пламя серии справа: чем длиннее серия, тем оно больше
+        let streak = done
+        let scale = 0.55 + 0.9 * CGFloat(streak) / CGFloat(total)
+        let fx = zones.right.midX - 1
+        let base = h - 6
+        let flick = CGFloat(sin(t * 9)) * 0.6
+        var layer = context
+        layer.translateBy(x: fx, y: base)
+        layer.scaleBy(x: scale, y: scale)
+        layer.fill(Path(ellipseIn: CGRect(x: -9, y: -15, width: 18, height: 18)),
+                   with: .radialGradient(Gradient(colors: [orange.opacity(0.28), .clear]), center: CGPoint(x: 0, y: -6), startRadius: 0, endRadius: 9))
+        layer.fill(Path { p in
+            p.move(to: CGPoint(x: 0, y: 2)); p.addQuadCurve(to: CGPoint(x: -5, y: -5), control: CGPoint(x: -6.5, y: -0.5))
+            p.addQuadCurve(to: CGPoint(x: flick, y: -15 - abs(flick)), control: CGPoint(x: -4, y: -9))
+            p.addQuadCurve(to: CGPoint(x: 5, y: -5), control: CGPoint(x: 4.5, y: -9))
+            p.addQuadCurve(to: CGPoint(x: 0, y: 2), control: CGPoint(x: 6.5, y: -0.5)); p.closeSubpath()
+        }, with: .color(orange))
+        layer.fill(Path { p in
+            p.move(to: CGPoint(x: 0, y: 1.4)); p.addQuadCurve(to: CGPoint(x: -2.6, y: -3.4), control: CGPoint(x: -3.4, y: 0))
+            p.addQuadCurve(to: CGPoint(x: flick * 0.6, y: -8), control: CGPoint(x: -2, y: -5.4))
+            p.addQuadCurve(to: CGPoint(x: 2.6, y: -3.4), control: CGPoint(x: 2.4, y: -5.4))
+            p.addQuadCurve(to: CGPoint(x: 0, y: 1.4), control: CGPoint(x: 3.4, y: 0)); p.closeSubpath()
+        }, with: .color(Color(red: 1, green: 0.9, blue: 0.4)))
+        context.draw(Text("\(streak)").font(.system(size: 9, weight: .heavy, design: .rounded)).foregroundColor(.white), at: CGPoint(x: zones.right.midX + 8, y: 6))
+
+        // Салют после полной серии
+        if finished {
+            let q = local - fill
+            for k in 0..<16 {
+                let a = Double(k) / 16 * 2 * .pi
+                let r = CGFloat(q) * 14 * CGFloat(0.5 + idleRandom(k + 600))
+                let c = CGPoint(x: zones.right.midX + CGFloat(cos(a)) * r, y: h * 0.4 + CGFloat(sin(a)) * r * 0.8 + CGFloat(q * q) * 3)
+                context.fill(Path(ellipseIn: CGRect(x: c.x - 1, y: c.y - 1, width: 2, height: 2)),
+                             with: .color([Color.yellow, .orange, .pink, .cyan][k % 4].opacity(Double(max(0, 1 - q / 4)))))
+            }
+        }
+    }
+}
+
+// MARK: Пешка в ферзи
+
+/// Шахматная метафора роста: пешка шаг за шагом идёт по доске сквозь чёлку, на последней клетке превращается в ферзя с короной и сверкает
+private enum IdlePawn {
+    private static func pawn(_ context: inout GraphicsContext, x: CGFloat, base: CGFloat, scale: CGFloat, color: Color) {
+        context.fill(Path(roundedRect: CGRect(x: x - 4 * scale, y: base - 2 * scale, width: 8 * scale, height: 2 * scale), cornerRadius: scale * 0.6), with: .color(color))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: x - 2.8 * scale, y: base - 2 * scale)); p.addLine(to: CGPoint(x: x + 2.8 * scale, y: base - 2 * scale))
+            p.addLine(to: CGPoint(x: x + 1.2 * scale, y: base - 8 * scale)); p.addLine(to: CGPoint(x: x - 1.2 * scale, y: base - 8 * scale)); p.closeSubpath()
+        }, with: .color(color))
+        context.fill(Path(roundedRect: CGRect(x: x - 2.6 * scale, y: base - 9.2 * scale, width: 5.2 * scale, height: 1.4 * scale), cornerRadius: scale * 0.5), with: .color(color))
+        context.fill(Path(ellipseIn: CGRect(x: x - 2.4 * scale, y: base - 13 * scale, width: 4.8 * scale, height: 4.8 * scale)), with: .color(color))
+    }
+
+    private static func queen(_ context: inout GraphicsContext, x: CGFloat, base: CGFloat, scale: CGFloat, color: Color, crown: Color) {
+        context.fill(Path(roundedRect: CGRect(x: x - 4.4 * scale, y: base - 2 * scale, width: 8.8 * scale, height: 2 * scale), cornerRadius: scale * 0.6), with: .color(color))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: x - 3.2 * scale, y: base - 2 * scale)); p.addLine(to: CGPoint(x: x + 3.2 * scale, y: base - 2 * scale))
+            p.addLine(to: CGPoint(x: x + 1.4 * scale, y: base - 11 * scale)); p.addLine(to: CGPoint(x: x - 1.4 * scale, y: base - 11 * scale)); p.closeSubpath()
+        }, with: .color(color))
+        context.fill(Path(roundedRect: CGRect(x: x - 3 * scale, y: base - 12.4 * scale, width: 6 * scale, height: 1.6 * scale), cornerRadius: scale * 0.5), with: .color(color))
+        // Корона из пяти зубцов
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: x - 3.6 * scale, y: base - 12.4 * scale))
+            for k in 0..<5 {
+                let px = x - 3.6 * scale + CGFloat(k) * 1.8 * scale
+                p.addLine(to: CGPoint(x: px, y: base - 17.4 * scale)); p.addLine(to: CGPoint(x: px + 0.9 * scale, y: base - 14.6 * scale))
+            }
+            p.addLine(to: CGPoint(x: x + 3.6 * scale, y: base - 12.4 * scale)); p.closeSubpath()
+        }, with: .color(color))
+        for k in 0..<5 {
+            context.fill(Path(ellipseIn: CGRect(x: x - 3.6 * scale + CGFloat(k) * 1.8 * scale - 0.8 * scale, y: base - 18.2 * scale, width: 1.6 * scale, height: 1.6 * scale)), with: .color(crown))
+        }
+    }
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let base = h - 4
+        let cycle = 17.0
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let gold = Color(red: 1, green: 0.85, blue: 0.3)
+
+        // Шахматная полоска вдоль низа
+        let square: CGFloat = 5.5
+        var i = 0
+        var x: CGFloat = 0
+        while x < w {
+            context.fill(Path(CGRect(x: x, y: base, width: square, height: 4)), with: .color(i % 2 == 0 ? Color(red: 0.75, green: 0.6, blue: 0.4) : Color(red: 0.35, green: 0.22, blue: 0.14)))
+            x += square
+            i += 1
+        }
+
+        // Путь пешки: шагает клеткой за клеткой
+        let steps = Int((w - 24) / square)
+        let walkTime = 10.0
+        let progress = min(1, max(0, (local - 0.5) / walkTime))
+        let stepFloat = progress * Double(steps)
+        let stepIndex = Int(stepFloat)
+        let within = stepFloat - Double(stepIndex)
+        let hop = progress < 1 ? CGFloat(sin(within * .pi)) * 3.4 : 0
+        let px = 12 + (CGFloat(stepIndex) + CGFloat(within * within * (3 - 2 * within))) * square
+        let promoted = local > 0.5 + walkTime + 0.6
+        let color = Color(white: 0.96)
+
+        if !promoted {
+            pawn(&context, x: px, base: base - hop, scale: 0.85, color: color)
+        } else {
+            let q = local - (0.5 + walkTime + 0.6)
+            // Вспышка превращения
+            if q < 1.2 {
+                let r = CGFloat(q / 1.2)
+                context.stroke(Path(ellipseIn: CGRect(x: px - r * 14, y: base - 8 - r * 10, width: r * 28, height: r * 20)), with: .color(gold.opacity(Double(1 - r))), lineWidth: 1.4)
+            }
+            let pop = q < 0.4 ? 1 + 0.4 * CGFloat(sin(q / 0.4 * .pi)) : 1
+            queen(&context, x: px, base: base, scale: 0.85 * pop, color: color, crown: gold)
+            // Искры вокруг короны
+            for k in 0..<5 {
+                let a = t * 2 + Double(k) * 1.26
+                let c = CGPoint(x: px + CGFloat(cos(a)) * 8, y: base - 12 + CGFloat(sin(a)) * 6)
+                var spark = Path()
+                let r = 1.6 * CGFloat(abs(sin(t * 5 + Double(k))))
+                spark.move(to: CGPoint(x: c.x - r, y: c.y)); spark.addLine(to: CGPoint(x: c.x + r, y: c.y))
+                spark.move(to: CGPoint(x: c.x, y: c.y - r)); spark.addLine(to: CGPoint(x: c.x, y: c.y + r))
+                context.stroke(spark, with: .color(gold), lineWidth: 0.8)
+            }
+        }
+        _ = h
+    }
+}
+
+// MARK: Яблочко
+
+/// Лучник справа раз за разом стреляет по мишени слева: стрелы летят сквозь чёлку и ложатся всё ближе к центру, пятая попадает в яблочко и вспыхивает
+private enum IdleBullseye {
+    static let shotTime = 3.0
+    static let shots = 5
+    // Куда ложится каждая стрела (смещение от центра мишени в долях радиуса)
+    static let hits: [CGPoint] = [CGPoint(x: -0.7, y: -0.55), CGPoint(x: 0.6, y: 0.65), CGPoint(x: -0.4, y: 0.35), CGPoint(x: 0.25, y: -0.3), CGPoint(x: 0, y: 0)]
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let ground = h - 3
+        let cycle = shotTime * Double(shots) + 3
+        let local = t.truncatingRemainder(dividingBy: cycle)
+        let shotIndex = min(shots, Int(local / shotTime))
+        let target = CGPoint(x: zones.left.midX - 3, y: h * 0.5)
+        let radius: CGFloat = 11
+
+        // Мишень на подставке
+        context.stroke(Path { p in p.move(to: CGPoint(x: target.x, y: target.y + radius)); p.addLine(to: CGPoint(x: target.x - 5, y: ground)); p.move(to: CGPoint(x: target.x, y: target.y + radius)); p.addLine(to: CGPoint(x: target.x + 5, y: ground)) },
+                       with: .color(Color(red: 0.5, green: 0.32, blue: 0.18)), lineWidth: 1.2)
+        for (k, color) in [Color.white, Color(red: 0.9, green: 0.2, blue: 0.25), .white, Color(red: 0.9, green: 0.2, blue: 0.25), Color(red: 1, green: 0.85, blue: 0.3)].enumerated() {
+            let r = radius * CGFloat(5 - k) / 5
+            context.fill(Path(ellipseIn: CGRect(x: target.x - r, y: target.y - r, width: r * 2, height: r * 2)), with: .color(color))
+        }
+        context.stroke(Path(ellipseIn: CGRect(x: target.x - radius, y: target.y - radius, width: radius * 2, height: radius * 2)), with: .color(Color(white: 0.3)), lineWidth: 0.6)
+
+        // Воткнувшиеся стрелы
+        let landed = local >= shotTime * Double(shots) ? shots : shotIndex
+        let wobbleSince = local - Double(max(0, shotIndex)) * shotTime
+        for k in 0..<landed {
+            let hit = hits[k]
+            let point = CGPoint(x: target.x + hit.x * radius * 0.85, y: target.y + hit.y * radius * 0.85)
+            let isNew = k == shotIndex - 1 && wobbleSince < 0.9 && local < shotTime * Double(shots)
+            let wobble = isNew ? CGFloat(sin(wobbleSince * 40) * exp(-wobbleSince * 6) * 0.25) : 0
+            var layer = context
+            layer.translateBy(x: point.x, y: point.y)
+            layer.rotate(by: .radians(Double(wobble) + 0.12))
+            layer.stroke(Path { p in p.move(to: .zero); p.addLine(to: CGPoint(x: 9, y: 0)) }, with: .color(Color(red: 0.8, green: 0.65, blue: 0.4)), lineWidth: 0.8)
+            layer.fill(Path { p in p.move(to: CGPoint(x: 9, y: 0)); p.addLine(to: CGPoint(x: 11, y: -1.4)); p.addLine(to: CGPoint(x: 10, y: 0)); p.addLine(to: CGPoint(x: 11, y: 1.4)); p.closeSubpath() },
+                       with: .color(Color(red: 0.4, green: 0.8, blue: 1)))
+        }
+
+        // Лучник справа: целится, натягивает тетиву
+        let archer = CGPoint(x: zones.right.midX + 5, y: ground)
+        let inShot = local < shotTime * Double(shots)
+        let phase = inShot ? (local.truncatingRemainder(dividingBy: shotTime)) : 0
+        let draw = CGFloat(min(1, phase / 1.4))
+        let released = phase > 1.55
+        let skin = Color(red: 1, green: 0.8, blue: 0.62)
+        context.stroke(Path { p in
+            p.move(to: CGPoint(x: archer.x - 1, y: ground - 9)); p.addLine(to: CGPoint(x: archer.x - 3.2, y: ground))
+            p.move(to: CGPoint(x: archer.x + 1, y: ground - 9)); p.addLine(to: CGPoint(x: archer.x + 3.2, y: ground))
+        }, with: .color(Color(red: 0.2, green: 0.5, blue: 0.3)), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+        context.stroke(Path { p in p.move(to: CGPoint(x: archer.x, y: ground - 9)); p.addLine(to: CGPoint(x: archer.x, y: ground - 17)) },
+                       with: .color(Color(red: 0.3, green: 0.65, blue: 0.4)), style: StrokeStyle(lineWidth: 3.6, lineCap: .round))
+        context.fill(Path(ellipseIn: CGRect(x: archer.x - 2.2, y: ground - 22.4, width: 4.4, height: 4.4)), with: .color(skin))
+        context.fill(Path { p in p.move(to: CGPoint(x: archer.x - 2.4, y: ground - 21.6)); p.addLine(to: CGPoint(x: archer.x, y: ground - 25)); p.addLine(to: CGPoint(x: archer.x + 2.4, y: ground - 21.6)); p.closeSubpath() },
+                     with: .color(Color(red: 0.7, green: 0.2, blue: 0.2)))
+        // Лук в вытянутой руке слева от лучника
+        let bowX = archer.x - 6
+        let bowY = ground - 15
+        context.stroke(Path { p in p.move(to: CGPoint(x: archer.x - 1, y: ground - 15.5)); p.addLine(to: CGPoint(x: bowX, y: bowY)) }, with: .color(skin), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+        var bow = Path()
+        bow.addArc(center: CGPoint(x: bowX + 3, y: bowY), radius: 6.5, startAngle: .degrees(120), endAngle: .degrees(240), clockwise: false)
+        context.stroke(bow, with: .color(Color(red: 0.6, green: 0.38, blue: 0.2)), lineWidth: 1.3)
+        let pull = released ? 0 : draw * 4.5
+        let string = Path { p in
+            p.move(to: CGPoint(x: bowX + 3 - 3.3, y: bowY - 5.6)); p.addLine(to: CGPoint(x: bowX + 3 + pull, y: bowY)); p.addLine(to: CGPoint(x: bowX + 3 - 3.3, y: bowY + 5.6))
+        }
+        context.stroke(string, with: .color(.white.opacity(0.8)), lineWidth: 0.5)
+        context.stroke(Path { p in p.move(to: CGPoint(x: archer.x - 1, y: ground - 15.5)); p.addLine(to: CGPoint(x: bowX + 3 + pull, y: bowY)) }, with: .color(skin), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+
+        // Стрела в полёте: сквозь чёлку к мишени
+        if inShot {
+            if !released {
+                // Стрела на тетиве
+                context.stroke(Path { p in p.move(to: CGPoint(x: bowX + 3 + pull, y: bowY)); p.addLine(to: CGPoint(x: bowX - 5 + pull, y: bowY)) },
+                               with: .color(Color(red: 0.8, green: 0.65, blue: 0.4)), lineWidth: 0.8)
+            } else if phase < 1.55 + 0.9 {
+                let flight = CGFloat((phase - 1.55) / 0.9)
+                let startX = bowX - 2
+                let hit = hits[min(shotIndex, shots - 1)]
+                let endX = target.x + hit.x * radius * 0.85
+                let x = startX + (endX - startX) * flight
+                let y = bowY + (target.y + hit.y * radius * 0.85 - bowY) * flight - CGFloat(sin(Double(flight) * .pi)) * 3
+                context.stroke(Path { p in p.move(to: CGPoint(x: x, y: y)); p.addLine(to: CGPoint(x: x + 8, y: y + 0.6)) }, with: .color(Color(red: 0.8, green: 0.65, blue: 0.4)), lineWidth: 0.8)
+                context.fill(Path { p in p.move(to: CGPoint(x: x + 8, y: y + 0.6)); p.addLine(to: CGPoint(x: x + 10, y: y - 0.8)); p.addLine(to: CGPoint(x: x + 9, y: y + 0.6)); p.addLine(to: CGPoint(x: x + 10, y: y + 2)); p.closeSubpath() },
+                             with: .color(Color(red: 0.4, green: 0.8, blue: 1)))
+            }
+        }
+
+        // Яблочко: вспышка и надпись
+        let bullseye = local - shotTime * Double(shots - 1) - 1.55 - 0.9
+        if bullseye > 0, bullseye < 2.6 {
+            let q = CGFloat(bullseye / 2.6)
+            for k in 0..<10 {
+                let a = Double(k) / 10 * 2 * .pi
+                var ray = Path()
+                ray.move(to: CGPoint(x: target.x + CGFloat(cos(a)) * 3, y: target.y + CGFloat(sin(a)) * 3))
+                ray.addLine(to: CGPoint(x: target.x + CGFloat(cos(a)) * (3 + q * 14), y: target.y + CGFloat(sin(a)) * (3 + q * 14)))
+                context.stroke(ray, with: .color(Color(red: 1, green: 0.9, blue: 0.4).opacity(Double(1 - q))), lineWidth: 1.2)
+            }
+            context.draw(Text("BULLSEYE!").font(.system(size: 6.5, weight: .heavy, design: .rounded)).foregroundColor(Color(red: 1, green: 0.9, blue: 0.4).opacity(Double(1 - q * 0.5))),
+                         at: CGPoint(x: w / 2 + 40, y: 4.5))
+        }
+    }
+}
+
+// MARK: Упорный труд
+
+/// Шахтёр без устали бьёт киркой по породе: летят искры и осколки, после нескольких ударов камень раскалывается, самоцвет взлетает по дуге через чёлку и ложится в растущую кучу справа
+private enum IdleGrind {
+    static let gemColors: [Color] = [Color(red: 0.3, green: 0.85, blue: 1), Color(red: 1, green: 0.4, blue: 0.6), Color(red: 0.5, green: 1, blue: 0.5), Color(red: 1, green: 0.85, blue: 0.3)]
+
+    private static func gem(_ context: inout GraphicsContext, at c: CGPoint, size r: CGFloat, color: Color, spin: Double) {
+        let squash = CGFloat(0.35 + 0.65 * abs(cos(spin)))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: c.x, y: c.y - r)); p.addLine(to: CGPoint(x: c.x + r * squash, y: c.y)); p.addLine(to: CGPoint(x: c.x, y: c.y + r * 1.1)); p.addLine(to: CGPoint(x: c.x - r * squash, y: c.y)); p.closeSubpath()
+        }, with: .color(color))
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: c.x, y: c.y - r)); p.addLine(to: CGPoint(x: c.x + r * squash * 0.5, y: c.y - r * 0.2)); p.addLine(to: CGPoint(x: c.x - r * squash * 0.5, y: c.y - r * 0.2)); p.closeSubpath()
+        }, with: .color(.white.opacity(0.55)))
+    }
+
+    static func draw(in context: inout GraphicsContext, zones: IdleZones, t: Double) {
+        let w = zones.size.width
+        let h = zones.size.height
+        let ground = h - 3
+        let swingTime = 0.9
+        let swingsPerGem = 4
+        let gemCycle = swingTime * Double(swingsPerGem) + 0.4
+        let gemNumber = Int(floor(t / gemCycle))
+        let local = t - Double(gemNumber) * gemCycle
+        let swing = Int(local / swingTime)
+        let swingPhase = (local - Double(swing) * swingTime) / swingTime
+        let breaking = local >= swingTime * Double(swingsPerGem)
+        let rock = CGPoint(x: zones.left.maxX - 8, y: ground - 8)
+
+        // Земля пещеры
+        for (i, zone) in [zones.left, zones.right].enumerated() {
+            idleMound(&context, zone: zone, h: h, pile: 2.5, color: Color(red: 0.18, green: 0.14, blue: 0.14), shift: Double(i) * 2)
+        }
+
+        // Шахтёр: ноги, корпус, голова в каске с фонарём
+        let mx = zones.left.minX + 11
+        context.stroke(Path { p in p.move(to: CGPoint(x: mx - 1, y: ground - 8)); p.addLine(to: CGPoint(x: mx - 3, y: ground)); p.move(to: CGPoint(x: mx + 1, y: ground - 8)); p.addLine(to: CGPoint(x: mx + 3.4, y: ground)) },
+                       with: .color(Color(red: 0.3, green: 0.3, blue: 0.5)), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+        context.stroke(Path { p in p.move(to: CGPoint(x: mx, y: ground - 8)); p.addLine(to: CGPoint(x: mx + 0.8, y: ground - 15.5)) },
+                       with: .color(Color(red: 0.95, green: 0.55, blue: 0.2)), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+        context.fill(Path(ellipseIn: CGRect(x: mx - 1.4, y: ground - 20, width: 4.4, height: 4.4)), with: .color(Color(red: 1, green: 0.8, blue: 0.62)))
+        context.fill(Path { p in p.addArc(center: CGPoint(x: mx + 0.8, y: ground - 19.4), radius: 3, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false); p.closeSubpath() },
+                     with: .color(Color(red: 1, green: 0.85, blue: 0.2)))
+        let lampGlow = 0.6 + 0.4 * sin(t * 6)
+        context.fill(Path { p in
+            p.move(to: CGPoint(x: mx + 3.4, y: ground - 20.4)); p.addLine(to: CGPoint(x: rock.x + 2, y: rock.y - 6)); p.addLine(to: CGPoint(x: rock.x + 2, y: rock.y + 5)); p.closeSubpath()
+        }, with: .linearGradient(Gradient(colors: [Color(red: 1, green: 0.95, blue: 0.6).opacity(0.28 * lampGlow), .clear]), startPoint: CGPoint(x: mx + 3, y: ground - 20), endPoint: CGPoint(x: rock.x, y: rock.y)))
+
+        // Кирка: замах и удар, угол по фазе
+        let swingAngle: Double
+        if breaking { swingAngle = 0.3 }
+        else if swingPhase < 0.55 { swingAngle = -1.15 - 0.15 * sin(swingPhase / 0.55 * .pi) + (swingPhase / 0.55) * 0.0 }
+        else if swingPhase < 0.7 { swingAngle = -1.15 + (swingPhase - 0.55) / 0.15 * 1.45 }
+        else { swingAngle = 0.3 - (swingPhase - 0.7) / 0.3 * 0.3 }
+        let shoulder = CGPoint(x: mx + 1, y: ground - 14.4)
+        var pick = context
+        pick.translateBy(x: shoulder.x, y: shoulder.y)
+        pick.rotate(by: .radians(swingAngle))
+        pick.stroke(Path { p in p.move(to: .zero); p.addLine(to: CGPoint(x: 12, y: 0)) }, with: .color(Color(red: 0.6, green: 0.4, blue: 0.2)), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+        pick.stroke(Path { p in p.move(to: CGPoint(x: 11, y: -4)); p.addQuadCurve(to: CGPoint(x: 11, y: 4), control: CGPoint(x: 14.5, y: 0)) }, with: .color(Color(white: 0.8)), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+        pick.stroke(Path { p in p.move(to: .zero); p.addLine(to: CGPoint(x: 3, y: 0.4)) }, with: .color(Color(red: 1, green: 0.8, blue: 0.62)), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+
+        // Камень: трескается с каждым ударом
+        let cracks = breaking ? swingsPerGem : swing
+        if !breaking || local < swingTime * Double(swingsPerGem) + 0.12 {
+            let rockShape = Path { p in
+                p.move(to: CGPoint(x: rock.x - 5, y: ground)); p.addLine(to: CGPoint(x: rock.x - 6, y: rock.y + 1)); p.addLine(to: CGPoint(x: rock.x - 2, y: rock.y - 5))
+                p.addLine(to: CGPoint(x: rock.x + 3, y: rock.y - 4)); p.addLine(to: CGPoint(x: rock.x + 6, y: rock.y + 2)); p.addLine(to: CGPoint(x: rock.x + 5, y: ground)); p.closeSubpath()
+            }
+            context.fill(rockShape, with: .color(Color(white: 0.34)))
+            context.stroke(rockShape, with: .color(Color(white: 0.2)), lineWidth: 0.8)
+            for k in 0..<cracks {
+                var crack = Path()
+                crack.move(to: CGPoint(x: rock.x - 1 + CGFloat(k) * 1.3, y: rock.y - 3))
+                crack.addLine(to: CGPoint(x: rock.x - 2 + CGFloat(k) * 1.8, y: rock.y)); crack.addLine(to: CGPoint(x: rock.x + CGFloat(k) * 1.2 - 1, y: rock.y + 3.4))
+                context.stroke(crack, with: .color(.black.opacity(0.6)), lineWidth: 0.7)
+            }
+        }
+        // Искры и осколки при ударе
+        if !breaking, swingPhase > 0.68, swingPhase < 0.95 {
+            let q = CGFloat((swingPhase - 0.68) / 0.27)
+            for k in 0..<7 {
+                let a = -1.2 + Double(k) * 0.4
+                let r = q * (6 + CGFloat(idleRandom(k + swing * 9)) * 6)
+                let c = CGPoint(x: rock.x - 5 + CGFloat(cos(a)) * r, y: rock.y + CGFloat(sin(a)) * r + q * q * 5)
+                context.fill(Path(CGRect(x: c.x, y: c.y, width: 1.3, height: 1.3)), with: .color((k % 2 == 0 ? Color(red: 1, green: 0.85, blue: 0.3) : Color(white: 0.6)).opacity(Double(1 - q))))
+            }
+        }
+
+        // Самоцвет вылетает дугой через чёлку и падает в кучу справа
+        let color = gemColors[gemNumber % gemColors.count]
+        let pileX = zones.right.midX + 2
+        if breaking {
+            let flight = CGFloat(min(1, (local - swingTime * Double(swingsPerGem)) / 0.4))
+            let rise = CGPoint(x: rock.x, y: rock.y - flight * 6)
+            gem(&context, at: rise, size: 3.2, color: color, spin: t * 8)
+        }
+        let flightStart = swingTime * Double(swingsPerGem)
+        _ = flightStart
+
+        // Куча самоцветов справа и счётчик
+        let collected = min(14, gemNumber % 15)
+        for k in 0..<collected {
+            let col = k % 5, row = k / 5
+            let c = CGPoint(x: pileX - 8 + CGFloat(col) * 4 + (row % 2 == 0 ? 0 : 2), y: ground - 3 - CGFloat(row) * 3.4)
+            gem(&context, at: c, size: 2.1, color: gemColors[k % gemColors.count], spin: 0)
+        }
+        // Вылет через экран: самоцвет с дуги садится в кучу, пока идёт следующий цикл
+        let travel = local / gemCycle
+        if gemNumber > 0, travel < 0.5 {
+            let q = CGFloat(travel / 0.5)
+            let x = rock.x + (pileX - rock.x) * q
+            let y = rock.y - CGFloat(sin(Double(q) * .pi)) * 14 + (ground - 3 - rock.y) * q * q
+            gem(&context, at: CGPoint(x: x, y: y), size: 2.8, color: gemColors[(gemNumber - 1) % gemColors.count], spin: t * 9)
+        }
+        context.draw(Text("×\(gemNumber % 15)").font(.system(size: 8, weight: .heavy, design: .rounded)).foregroundColor(Color(red: 1, green: 0.9, blue: 0.5)),
+                     at: CGPoint(x: zones.right.maxX - 7, y: 6))
+        _ = w
     }
 }

@@ -119,7 +119,7 @@ enum ClosedNotchLayout {
 
 /// Анимация закрытой «чёлки» в простое: нет ни работающих нейросетей, ни медиа
 enum IdleStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
-    case off, cat, pong, fireflies, fish, snake, clock, chomp, matrix, rain, invaders, dino, blocks, puppy, fireworks, rocket, train, snow, robot, bats, tesla, ocean, jellyfish, runner, aurora, synthwave, whale, dragon, chase, equalizer, autumn, sakura, beach, rainyNight, moon, garden, voxels, lighthouse, carnival, windmill, city, cauldron, arcade, money, supercar, growth, summit, levelUp, ticker
+    case off, cat, pong, fireflies, fish, snake, clock, chomp, matrix, rain, invaders, dino, blocks, puppy, fireworks, rocket, train, snow, robot, bats, tesla, ocean, jellyfish, runner, aurora, synthwave, whale, dragon, chase, equalizer, autumn, sakura, beach, rainyNight, moon, garden, voxels, lighthouse, carnival, windmill, city, cauldron, arcade, money, supercar, growth, summit, levelUp, ticker, gym, finish, streak, pawn, bullseye, grind
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -172,6 +172,12 @@ enum IdleStyle: String, CaseIterable, Identifiable, Defaults.Serializable {
         case .summit: return "Summit"
         case .levelUp: return "Level up"
         case .ticker: return "Motivation"
+        case .gym: return "Gym"
+        case .finish: return "Finish line"
+        case .streak: return "Habit streak"
+        case .pawn: return "Pawn to queen"
+        case .bullseye: return "Bullseye"
+        case .grind: return "Grind"
         }
     }
 }
