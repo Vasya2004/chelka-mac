@@ -238,6 +238,9 @@ extension Defaults.Keys {
     static let agentPermissionPrompts = Key<Bool>("agentPermissionPrompts", default: true)
     /// Звук, когда агент спрашивает: разрешение, вопрос с вариантами или план (отличается от звука «агент закончил»)
     static let agentPromptSound = Key<Bool>("agentPromptSound", default: true)
+    /// Громкость сигналов агента относительно общей громкости Mac: 0…1
+    static let agentPromptVolume = Key<Double>("agentPromptVolume", default: 1.0)
+    static let agentCompletionVolume = Key<Double>("agentCompletionVolume", default: 1.0)
     static let agentCompletionSound = Key<Bool>("agentCompletionSound", default: true)
     static let agentCompletionExpand = Key<Bool>("agentCompletionExpand", default: true)
     static let showAIUsage = Key<Bool>("showAIUsage", default: true)

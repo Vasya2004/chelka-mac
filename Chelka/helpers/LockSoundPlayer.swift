@@ -6,6 +6,7 @@
 //
 
 import AVFoundation
+import Defaults
 
 @MainActor
 final class LockSoundPlayer {
@@ -32,7 +33,7 @@ final class LockSoundPlayer {
     func playAgentPrompt() {
         do {
             let player = try AVAudioPlayer(data: agentPromptWAV)
-            player.volume = 1
+            player.volume = Float(min(1, max(0, Defaults[.agentPromptVolume])))
             player.prepareToPlay()
             agentPromptPlayer = player
             if !player.play() { throw CocoaError(.fileReadUnknown) }
@@ -40,6 +41,7 @@ final class LockSoundPlayer {
             configureIfNeeded()
             if !engine.isRunning { engine.prepare(); try? engine.start() }
             player.stop()
+            player.volume = Float(min(1, max(0, Defaults[.agentPromptVolume])))
             player.scheduleBuffer(agentPromptBuffer, at: nil, options: .interrupts, completionHandler: nil)
             player.play()
         }
@@ -64,7 +66,7 @@ final class LockSoundPlayer {
     func playAgentDone() {
         do {
             let player = try AVAudioPlayer(data: agentDoneWAV)
-            player.volume = 1
+            player.volume = Float(min(1, max(0, Defaults[.agentCompletionVolume])))
             player.prepareToPlay()
             agentDonePlayer = player
             if !player.play() { throw CocoaError(.fileReadUnknown) }
@@ -73,6 +75,7 @@ final class LockSoundPlayer {
             configureIfNeeded()
             if !engine.isRunning { engine.prepare(); try? engine.start() }
             player.stop()
+            player.volume = Float(min(1, max(0, Defaults[.agentCompletionVolume])))
             player.scheduleBuffer(agentDoneBuffer, at: nil, options: .interrupts, completionHandler: nil)
             player.play()
         }
@@ -100,6 +103,7 @@ final class LockSoundPlayer {
         configureIfNeeded()
         startEngineIfNeeded()
         let buffer = kind == .unlocking ? unlockBuffer : lockBuffer
+        player.volume = 1   // узел общий с запасным путём сигналов агента, их громкость сюда не должна попадать
         player.scheduleBuffer(buffer, at: nil, options: .interrupts, completionHandler: nil)
         if !player.isPlaying { player.play() }
     }

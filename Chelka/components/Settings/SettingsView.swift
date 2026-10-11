@@ -1660,6 +1660,14 @@ struct Advanced: View {
                     Text("Play a different sound when an agent asks you something")
                 }
                 .disabled(!showAgentActivity || !Defaults[.agentPermissionPrompts])
+                AgentSoundVolumeRow(
+                    title: "Finish sound volume", key: .agentCompletionVolume,
+                    enabled: showAgentActivity && Defaults[.agentCompletionSound]
+                ) { LockSoundPlayer.shared.playAgentDone() }
+                AgentSoundVolumeRow(
+                    title: "Question sound volume", key: .agentPromptVolume,
+                    enabled: showAgentActivity && Defaults[.agentPermissionPrompts] && Defaults[.agentPromptSound]
+                ) { LockSoundPlayer.shared.playAgentPrompt() }
             } header: {
                 Text("AI Agents")
             } footer: {
@@ -1835,4 +1843,46 @@ func warningBadge(_ text: String, _ description: String) -> some View {
 
 #Preview {
     HUD()
+}
+
+
+/// Строка настроек: ползунок громкости сигнала агента (относительно общей громкости Mac) и кнопка «послушать»
+struct AgentSoundVolumeRow: View {
+    let title: String
+    let key: Defaults.Key<Double>
+    let enabled: Bool
+    let play: () -> Void
+
+    @Default private var volume: Double
+
+    init(title: String, key: Defaults.Key<Double>, enabled: Bool, play: @escaping () -> Void) {
+        self.title = title
+        self.key = key
+        self.enabled = enabled
+        self.play = play
+        _volume = Default(key)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title)
+            Spacer(minLength: 8)
+            Image(systemName: "speaker.fill").foregroundStyle(.secondary).font(.system(size: 11))
+            Slider(value: $volume, in: 0...1)
+                .frame(width: 140)
+            Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary).font(.system(size: 11))
+            Text("\(Int((volume * 100).rounded()))%")
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(width: 38, alignment: .trailing)
+            Button {
+                play()
+            } label: {
+                Image(systemName: "play.fill")
+            }
+            .buttonStyle(.borderless)
+            .help("Play the sound at this volume")
+        }
+        .disabled(!enabled)
+    }
 }
