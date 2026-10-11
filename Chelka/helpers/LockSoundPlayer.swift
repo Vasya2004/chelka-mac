@@ -23,6 +23,28 @@ final class LockSoundPlayer {
     private lazy var agentDoneBuffer = makeBell(
         notes: [(783.99, 0.0), (1046.5, 0.1), (1318.51, 0.2)], duration: 1.2, peak: 0.4)
 
+    /// Вопрос агента (разрешение, выбор варианта, план): два коротких «пинг-пинг» вверх — заметно отличается от арпеджио завершения
+    private lazy var agentPromptBuffer = makeBell(
+        notes: [(659.25, 0.0), (987.77, 0.13), (659.25, 0.72), (987.77, 0.85)], duration: 1.7, peak: 0.42)
+    private var agentPromptPlayer: AVAudioPlayer?
+    private lazy var agentPromptWAV: Data = Self.wavData(from: agentPromptBuffer)
+
+    func playAgentPrompt() {
+        do {
+            let player = try AVAudioPlayer(data: agentPromptWAV)
+            player.volume = 1
+            player.prepareToPlay()
+            agentPromptPlayer = player
+            if !player.play() { throw CocoaError(.fileReadUnknown) }
+        } catch {
+            configureIfNeeded()
+            if !engine.isRunning { engine.prepare(); try? engine.start() }
+            player.stop()
+            player.scheduleBuffer(agentPromptBuffer, at: nil, options: .interrupts, completionHandler: nil)
+            player.play()
+        }
+    }
+
     /// Прогрев: заранее собираем буферы и запускаем движок, чтобы при блокировке звук шёл без задержки
     func prewarm() {
         configureIfNeeded()

@@ -236,6 +236,8 @@ extension Defaults.Keys {
     static let showUnlockAnimation = Key<Bool>("showUnlockAnimation", default: true)
     static let showAgentActivity = Key<Bool>("showAgentActivity", default: true)
     static let agentPermissionPrompts = Key<Bool>("agentPermissionPrompts", default: true)
+    /// Звук, когда агент спрашивает: разрешение, вопрос с вариантами или план (отличается от звука «агент закончил»)
+    static let agentPromptSound = Key<Bool>("agentPromptSound", default: true)
     static let agentCompletionSound = Key<Bool>("agentCompletionSound", default: true)
     static let agentCompletionExpand = Key<Bool>("agentCompletionExpand", default: true)
     static let showAIUsage = Key<Bool>("showAIUsage", default: true)

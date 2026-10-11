@@ -1656,6 +1656,10 @@ struct Advanced: View {
                     Text("Approve agent permissions in the notch")
                 }
                 .disabled(!showAgentActivity)
+                Defaults.Toggle(key: .agentPromptSound) {
+                    Text("Play a different sound when an agent asks you something")
+                }
+                .disabled(!showAgentActivity || !Defaults[.agentPermissionPrompts])
             } header: {
                 Text("AI Agents")
             } footer: {

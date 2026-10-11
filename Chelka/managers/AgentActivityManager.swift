@@ -217,6 +217,7 @@ final class AgentActivityManager: ObservableObject {
     @Published private(set) var banner: AgentBanner?
     private var bannerTask: Task<Void, Never>?
     private var lastCompletionSound = Date.distantPast
+    private var lastPromptSound = Date.distantPast
 
     /// Запросы разрешений, ожидающие ответа (самый старый показывается первым)
     @Published private(set) var pendingPermissions: [AgentPermissionRequest] = []
@@ -480,6 +481,12 @@ final class AgentActivityManager: ObservableObject {
         }
         permissionConnections[permission.id] = request.connection
         withAnimation(.spring(response: 0.5, dampingFraction: 0.78)) { pendingPermissions.append(permission) }
+
+        // Агент спрашивает — отдельный звук, не такой, как при завершении ответа; не чаще раза в 1,5 с
+        if Defaults[.agentPromptSound], Date().timeIntervalSince(lastPromptSound) > 1.5 {
+            lastPromptSound = Date()
+            LockSoundPlayer.shared.playAgentPrompt()
+        }
 
         // Агент ждёт — отмечаем в индикаторе
         apply(AgentEvent(
